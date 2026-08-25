@@ -51,6 +51,23 @@ Updating is the same without the `cp`: `git pull`, then rebuild, migrate and `up
 `ENCRYPTION_KEY` on an existing install must be the key already in use — stored channel
 credentials are encrypted with it, not hashed, and a new one makes them unrecoverable.
 
+## Development
+
+Needs Node 22+. Configuration is `backend/.env` (copy `backend/.env.example`), separate from the
+Docker install above — the frontend needs none.
+
+```bash
+npm run install:all
+cp backend/.env.example backend/.env
+# set ENCRYPTION_KEY; PROMETHEUS_URL/ALERTMANAGER_URL can point at a tunnelled
+# homeserver (ssh -L 9090:127.0.0.1:9090 homeserver) to work against real data.
+npm run prisma:migrate
+npm run dev          # backend on :3000, frontend on :4200
+```
+
+There is no Tailscale in front locally, so `TRUST_TAILSCALE_HEADER=false` and `DEV_USER_EMAIL`
+stands in for the identity header.
+
 ## Adding a server
 
 From the UI: *Register server* records it, then hands back a personalised
