@@ -100,8 +100,8 @@ Scope cut to the minimum that allows building and testing the application:
   appears to work while the figure answering "what does each client cost" simply is not there.
 - Alertmanager with the capacity rules (`predict_linear` over disk and RAM). See *Alerting*
   below for how delivery is arranged.
-- Grafana, **optional and temporary**: installed as a workbench to debug PromQL queries by mouse
-  before coding them into the backend. Not part of the product.
+- ~~Grafana as a temporary PromQL workbench.~~ Never needed: the queries were short enough to
+  write directly, and Chart.js draws the charts. Dropped 2026-08-25.
 
 `madrid-prod` and `marsella-prod` get instrumented later **using atalaya's generator**, which is
 also how we find out whether the generator is worth anything.
@@ -291,6 +291,26 @@ grid columns were made responsive (`w-[95vw]`/`grid-cols-1 sm:grid-cols-2`), and
 (Danger zone, notification channels, the history chart's peak-stats header) got `flex-col`/
 `flex-wrap` fixes to avoid narrow-screen overflow. Verified with Playwright at 375×812: drawer
 opens/closes correctly, no horizontal page overflow on overview/servers/server-detail.
+
+### Phase 2.6 — Monitoring the monitor — Done, 2026-08-25
+
+Inserted ahead of Phase 3: `homeserver` itself was the one machine nothing watched. `Server`
+gained a `kind` discriminator (`stack` | `host`) — a `host` server skips the SSH inventory
+entirely and takes its health from Prometheus, which is what makes a machine without `stack`
+representable at all. Its collectors are two more services in the same compose file, registered
+on boot rather than through the UI. Details, including why the disk rules were scoped to `/` in
+the process, in [monitoring.md](monitoring.md).
+
+Also folded in here: **per-app volume sizes**, measured by `backup.sh` (the one place with docker
+access that already walks every volume) and read back through `stack inventory`. See
+[monitoring.md](monitoring.md).
+
+And the install: one process, valid anywhere. Configuration collapsed to a single `.env` beside
+the compose file, the runtime-directory copy dance dropped in favour of running from a clone, and
+the machine-specific deploy scripts deleted — they were gitignored, so they were never the
+install path for anyone but this workstation. The repo was made public to support it, after
+auditing the history for credentials (none) and replacing real addresses, tailnet names and
+client names with placeholders.
 
 ### Phase 3 — Actions
 

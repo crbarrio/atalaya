@@ -214,6 +214,35 @@ permanently by design. If it stops, healthchecks.io reports it from outside — 
       Prometheus/cAdvisor for continuous history, since unlike disk-full there is no hard failure
       point that would make a days-remaining trend worth the extra infrastructure. Shown on the
       instance-detail page under Domains.
+- [x] **`homeserver` monitors itself — 2026-08-25**: the machine holding Prometheus, Alertmanager
+      and atalaya had no host metrics at all; the only self-scrape was job `prometheus` on
+      `localhost:9090`, which covers the process, not the box. It does not fit the normal flow —
+      no `stack`, no instances, nothing `stack inventory` can describe — so `Server` gained a
+      `kind` discriminator (`stack` | `host`). A `host` server is skipped by the 5-minute SSH
+      cron, and its health comes from `up{instance=…}` in Prometheus instead of `lastSeenAt`,
+      which is what stops it reading permanently `unreachable`. `node-exporter` and `cadvisor`
+      are two more services in the same compose file rather than
+      `infra/fleet/server-setup/setup-server.sh`, which aborts on a machine with no `stack`;
+      cAdvisor on **8081**, since Pi-hole holds 8080 here, and without
+      `--whitelisted_container_labels` since nothing here carries `stack.client`.
+      **Nothing is registered by hand**: `SelfRegisterService` upserts the row on boot from
+      `SELF_MONITOR_*` in the compose file and calls the existing `targets.regenerate()`, so
+      `node.json`/`cadvisor.json` gain the entry and `file_sd` picks it up within 30s without a
+      restart. All the `node*` queries were already keyed by `instance` alone, so the metrics
+      dashboard, history chart and days-remaining projections worked unchanged — the only new
+      metrics code is `hostContainers()`, which lists containers by docker's own names because
+      `instanceOfContainer` expects stack's `app-<instance>-<service>-N` convention.
+      Verified live: both targets `up=1`, health `ok`, all six rule groups healthy, the SSH
+      inventory returning `ok` with no connection attempt, and the containers endpoint listing
+      qBittorrent, Home Assistant, Syncthing, Plex and Pi-hole alongside atalaya's own seven.
+- [x] **Disk alerts scoped to `/` — 2026-08-25**: `DiskWillFillIn4Days` and `DiskAlmostFull`
+      filtered on `fstype` but not `mountpoint`, while the panel's `nodeDiskUsedPercent` has
+      always been fixed to `mountpoint="/"` — alerts and UI could disagree about the same server.
+      Adding homeserver made it concrete: its Prometheus disk sits at ~88% *by design* (70 GB
+      retention cap on a 79 G disk) and `DiskAlmostFull` fires at 90%, and its downloads disk
+      fills and empties on torrent activity — both would have alerted for reasons nobody would
+      act on. Secondary mounts are a different question with different thresholds; if `/boot` or
+      a data disk ever needs watching it gets its own rule, not a side effect of this one.
 
 ## Backups are server-wide, not per-app — 2026-08-23
 
