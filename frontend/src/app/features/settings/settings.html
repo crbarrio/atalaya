@@ -1,0 +1,51 @@
+<div class="flex flex-col gap-8 max-w-3xl">
+  <h1 class="font-jetbrains text-on-surface text-lg uppercase tracking-wide">Settings</h1>
+
+  @if (loading()) {
+    <p class="text-on-surface-variant text-xs">Loading…</p>
+  } @else if (loadError()) {
+    <p class="text-error text-xs">{{ loadError() }}</p>
+  } @else {
+    <form (submit)="onSubmit($event)" class="flex flex-col gap-6">
+      <div class="flex flex-col gap-2 rounded-xs border border-outline-variant bg-surface-container-low p-4">
+        <h2 class="font-jetbrains text-on-surface text-sm uppercase tracking-wide">Watchdog</h2>
+        <p class="text-on-surface-variant text-xs">
+          healthchecks.io ping URL. `Watchdog` is one heartbeat for the whole
+          Prometheus → Alertmanager → atalaya chain, not per server — leave empty to disable the ping.
+        </p>
+
+        <label class="mt-2 flex flex-col gap-2">
+          <span class="text-on-surface-variant text-xs uppercase tracking-wide">Healthchecks URL</span>
+          <input
+            [formField]="settingsForm.healthchecksUrl"
+            placeholder="https://hc-ping.com/…"
+            class="rounded-xs border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface"
+          />
+        </label>
+
+        @if (settingsForm.healthchecksUrl().touched()) {
+          @for (error of settingsForm.healthchecksUrl().errors(); track error.kind) {
+            <p class="text-xs text-error">{{ error.message }}</p>
+          }
+        }
+
+        <div class="flex items-center gap-3">
+          <button
+            type="submit"
+            [disabled]="settingsForm().submitting()"
+            class="rounded-xs bg-primary px-4 py-2 font-jetbrains text-xs uppercase text-on-primary disabled:opacity-50 mt-2"
+          >
+            {{ settingsForm().submitting() ? 'Saving…' : 'Save' }}
+          </button>
+          @if (saved()) {
+            <span class="text-secondary text-xs">Saved.</span>
+          }
+        </div>
+      </div>
+
+      
+    </form>
+
+    <app-notification-channels />
+  }
+</div>

@@ -1,0 +1,110 @@
+<div class="flex max-h-[90vh] w-[95vw] flex-col bg-surface-container rounded-xs border border-outline shadow-sm sm:w-auto sm:min-w-2xl sm:max-w-6xl">
+  <div class="flex shrink-0 items-center justify-between border-b border-border px-6 py-4">
+    <h2 class="text-lg font-semibold font-jetbrains uppercase">Register server</h2>
+
+    <button
+      type="button"
+      class="rounded-xs border border-outline-variant p-2 text-on-surface flex transition hover:cursor-pointer hover:border-primary hover:bg-surface hover:text-primary"
+      (click)="onClose()"
+      aria-label="Cerrar modal">
+      <span class="material-symbols-outlined text-xl leading-none">close</span>
+    </button>
+  </div>
+
+
+
+  <div class="flex flex-col flex-1 overflow-auto bg-surface px-6 py-4 gap-6">
+
+    @if (!registered()) {
+      <form
+        (submit)="onSubmit($event)"
+        class="gap-6 flex flex-col"
+      >
+        <label class="flex flex-col gap-2">
+          <span class="text-on-surface-variant text-xs uppercase tracking-wide">Machine name</span>
+          <input
+            [formField]="registerForm.name"
+            placeholder="marsella-prod"
+            class="rounded-xs border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface"
+          />
+          <span class="text-on-surface-variant text-xs">
+            The machine must already be joined to the tailnet.
+          </span>
+        </label>
+
+        @if (registerForm.name().touched()) {
+          @for (error of registerForm.name().errors(); track error.kind) {
+            <p class="text-xs text-error">{{ error.message }}</p>
+          }
+        }
+
+        <button
+          type="submit"
+          [disabled]="registerForm().submitting()"
+          class="rounded-xs bg-primary px-4 py-2 font-jetbrains text-xs uppercase text-on-primary disabled:opacity-50"
+        >
+          {{ registerForm().submitting() ? 'Registering…' : 'Register' }}
+        </button>
+      </form>
+    } @else {
+      <div class="flex flex-col gap-6">
+        <div class="rounded-xs border border-secondary/30 bg-secondary/10 p-3 text-xs text-secondary">
+          '{{ registered()!.name }}' registered — resolved to {{ registered()!.tailnetIp }} on the
+          tailnet. Nothing has touched the machine itself yet.
+        </div>
+
+        <div class="flex flex-col gap-2 rounded-xs border border-outline-variant bg-surface-container-low p-4">
+          <h2 class="font-jetbrains text-on-surface text-sm uppercase tracking-wide">1. Run the artifact</h2>
+          <p class="text-on-surface-variant text-xs">
+            Download and run on the new machine — it already has this server's IP and atalaya's key baked in.
+          </p>
+          <a
+            [href]="setupScriptUrl()"
+            download
+            class="mt-2 inline-flex w-fit items-center gap-2 rounded-xs bg-primary px-4 py-2 font-jetbrains text-xs uppercase text-on-primary"
+          >
+            <span class="material-symbols-outlined text-base">download</span>
+            Download setup-{{ registered()!.name }}.sh
+          </a>
+          <code class="mt-1 text-on-surface-variant text-[11px]">sudo ./setup-{{ registered()!.name }}.sh</code>
+        </div>
+
+        <div class="flex flex-col gap-3 rounded-xs border border-outline-variant bg-surface-container-low p-4">
+          <div class="flex items-center justify-between">
+            <h2 class="font-jetbrains text-on-surface text-sm uppercase tracking-wide">2. Verify</h2>
+            <button
+              type="button"
+              (click)="verify()"
+              [disabled]="verifying()"
+              class="rounded-xs border border-outline-variant px-3 py-1.5 font-jetbrains text-[11px] uppercase text-on-surface hover:bg-surface-container-highest disabled:opacity-50"
+            >
+              {{ verifying() ? 'Checking…' : (checks() ? 'Re-check' : 'Run checks') }}
+            </button>
+          </div>
+
+          @if (checks()) {
+            <div class="flex flex-col gap-2">
+              @for (check of checks(); track check.check) {
+                <div class="flex items-center gap-3 text-sm">
+                  <span
+                    class="h-2.5 w-2.5 rounded-full"
+                    [class]="check.result === 'pass' ? 'bg-secondary' : 'bg-error'"
+                  ></span>
+                  <span class="text-on-surface font-jetbrains text-xs">{{ check.check }}</span>
+                  @if (check.detail) {
+                    <span class="text-on-surface-variant text-[11px]">{{ check.detail }}</span>
+                  }
+                </div>
+              }
+            </div>
+          } @else {
+            <p class="text-on-surface-variant text-xs">Run the artifact first, then check here.</p>
+          }
+        </div>
+      </div>
+    }
+  </div>
+
+
+  
+</div>

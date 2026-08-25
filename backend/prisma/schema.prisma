@@ -1,0 +1,236 @@
+// atalaya's database.
+//
+// It deliberately holds very little. Metrics live in Prometheus and are queried
+// on demand; the deployment state of record lives in `stack` on each server and
+// is read over SSH. What is stored here is the registry, the things that have
+// no other home (incidents, audit) and a cache so the UI does not open an SSH
+// connection on every page load.
+
+generator client {
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  moduleFormat = "cjs"
+}
+
+// Prisma 7 keeps the connection URL out of the schema: migrations read it from
+// prisma.config.ts, and the client gets it through the driver adapter.
+datasource db {
+  provider = "sqlite"
+}
+
+// ─── Registry ────────────────────────────────────────────────────────────────
+
+model Server {
+  id        String  @id @default(uuid())
+  /// `stack` — a managed fleet server, read over SSH — or `host`, a machine
+  /// with collectors but no `stack`: skipped by inventory, health from
+  /// Prometheus instead of SSH.
+  kind      String  @default("stack")
+  /// Must match the hostname `stack` knows, so inventory can be correlated.
+  name      String  @unique
+  /// DNS name or address used for SSH.
+  host      String
+  /// Tailscale IP. Prometheus scrapes this, never the MagicDNS name: it runs in
+  /// a container and does not inherit the host's resolver.
+  tailnetIp String
+
+  /// The dedicated account: in stack's group, no sudo, no docker.
+  sshUser String @default("atalaya")
+  sshPort Int    @default(22)
+  /// Overrides SSH_KEY_PATH. Development connects to each server with its own
+  /// key over the public name; production uses one key over the tailnet.
+  sshKeyPath String?
+  /// Absolute path, because an SSH exec has no working directory.
+  stackPath  String @default("/home/ubuntu/docker/stack/stack")
+
+  nodePort     Int @default(9100)
+  cadvisorPort Int @default(8080)
+
+  /// Set false to keep a server registered but out of scraping and inventory.
+  enabled Boolean @default(true)
+
+  // ── Last inventory refresh ────────────────────────────────────────────────
+  /// When the read succeeded. Null means it never has.
+  lastSeenAt DateTime?
+  /// Why the last read failed. Kept so a server that is down degrades the UI
+  /// with a reason instead of just showing nothing.
+  lastError  String?
+  /// mtime of the manifest that was read: the cache can then tell stale data
+  /// from fresh rather than assuming.
+  manifestAt DateTime?
+  /// False when the reading account cannot see the docker socket, which is the
+  /// normal case. Instance state is then unknown, not stopped.
+  containersObservable Boolean @default(false)
+
+  // ── Last backup, as reported by `stack inventory` ─────────────────────────
+  /// Kept as text: stack writes local time with no offset, and inventing one
+  /// would be worse than showing what it said.
+  lastBackupStatus String?
+  lastBackupAt     String?
+  lastBackupMode   String?
+  lastBackupDetail String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  instances Instance[]
+  incidents Incident[]
+  checks    ProvisionCheck[]
+
+  @@map("servers")
+}
+
+// ─── Inventory cache ─────────────────────────────────────────────────────────
+
+/// Cache of what `stack inventory` reports. Never the source of truth: it is
+/// refreshed on a schedule and may be stale, which is why `fetchedAt` is kept
+/// and shown in the UI.
+model Instance {
+  id       String @id @default(uuid())
+  serverId String
+  server   Server @relation(fields: [serverId], references: [id], onDelete: Cascade)
+
+  /// Instance name, as `stack` runs it on this machine.
+  name String
+  /// Catalogue application from apps.json. Several instances share one.
+  app  String?
+  /// Who this instance belongs to. The same value stack puts on the containers
+  /// as `stack.client`, so SSH and Prometheus can be joined on it.
+  client String?
+
+  enabled Boolean @default(true)
+
+  version         String?
+  deployedAt      DateTime?
+  previousVersion String?
+  previousAt      DateTime?
+
+  /// running | stopped | not deployed | unknown | disabled…
+  /// `unknown` is what SSH reports when the account cannot see docker, and it
+  /// must reach the UI as unknown: showing "stopped" would be a guess dressed
+  /// as a fact. Liveness comes from Prometheus.
+  state String?
+  /// JSON array of {name,state}, or null when not observable.
+  containers String?
+  /// JSON array of {name,sizeBytes}, or null when no backup has run yet —
+  /// backup.sh is what measures these, so freshness tracks the backup cadence.
+  volumes String?
+
+  databaseEngine String?
+  databaseName   String?
+
+  /// JSON array. SQLite has no native array type.
+  domains String?
+
+  fetchedAt DateTime @default(now())
+
+  @@unique([serverId, name])
+  @@map("instances")
+}
+
+// ─── Incidents ───────────────────────────────────────────────────────────────
+
+/// Alerts received from Alertmanager's webhook. This is the inbox; delivery to
+/// a channel is a separate concern handled by the notifier.
+model Incident {
+  id       String  @id @default(uuid())
+  serverId String?
+  server   Server? @relation(fields: [serverId], references: [id], onDelete: SetNull)
+
+  /// Alertmanager's fingerprint, so repeats update instead of duplicating.
+  fingerprint String @unique
+  alertName   String
+  severity    String @default("warning")
+  status      String @default("firing")
+  summary     String?
+  description String?
+  /// Full label set as JSON, for anything the columns above do not cover.
+  labels      String?
+
+  startsAt   DateTime
+  endsAt     DateTime?
+  receivedAt DateTime  @default(now())
+
+  notifiedAt DateTime?
+
+  @@index([status, startsAt])
+  @@map("incidents")
+}
+
+// ─── Notification channels ───────────────────────────────────────────────────
+
+/// Channels coexist and are toggled from the UI; they are not an exclusive
+/// choice. `config` holds credentials and is write-only from the API's point of
+/// view: values go in and are never returned.
+model NotificationChannel {
+  id      String  @id @default(uuid())
+  name    String  @unique
+  /// email | webhook | … one adapter per type in the notifier.
+  type    String
+  enabled Boolean @default(false)
+
+  /// JSON. Never serialised back out to a client.
+  config String
+
+  /// Comma-separated severities this channel takes.
+  severities String @default("critical,warning")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("notification_channels")
+}
+
+// ─── Provisioning verification ───────────────────────────────────────────────
+
+/// Result of the checks run after a server is registered: does node_exporter
+/// answer, does cAdvisor, does Prometheus see the target as UP. atalaya never
+/// installs anything — it generates the artifact and verifies the outcome.
+model ProvisionCheck {
+  id       String @id @default(uuid())
+  serverId String
+  server   Server @relation(fields: [serverId], references: [id], onDelete: Cascade)
+
+  /// node_exporter | cadvisor | prometheus_target
+  check   String
+  /// pass | fail | pending
+  result  String @default("pending")
+  detail  String?
+  checkedAt DateTime @default(now())
+
+  @@index([serverId, checkedAt])
+  @@map("provision_checks")
+}
+
+// ─── Settings ────────────────────────────────────────────────────────────────
+
+/// Singleton row (id is always 1) for the handful of values that have no
+/// other home — today just the Watchdog ping URL. Not per-server: Watchdog is
+/// one heartbeat for the whole Prometheus → Alertmanager → atalaya →
+/// healthchecks.io chain, not a per-machine thing.
+model Settings {
+  id              Int     @id @default(1)
+  healthchecksUrl String?
+
+  updatedAt DateTime @updatedAt
+
+  @@map("settings")
+}
+
+// ─── Audit ───────────────────────────────────────────────────────────────────
+
+/// Every action with an effect. Append-only by convention: nothing in the app
+/// updates or deletes rows here.
+model AuditEntry {
+  id        String   @id @default(uuid())
+  actor     String
+  action    String
+  target    String?
+  /// JSON with the details of what was done.
+  detail    String?
+  succeeded Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@map("audit_entries")
+}

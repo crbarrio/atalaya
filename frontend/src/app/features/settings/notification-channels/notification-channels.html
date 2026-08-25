@@ -1,0 +1,85 @@
+<div class="flex flex-col gap-3 rounded-xs border border-outline-variant bg-surface-container-low p-4">
+  <div class="flex items-center justify-between">
+    <h2 class="font-jetbrains text-on-surface text-sm uppercase tracking-wide">Notification channels</h2>
+    <button
+      type="button"
+      (click)="openForm()"
+      class="rounded-xs border border-outline-variant px-3 py-1.5 font-jetbrains text-[11px] uppercase text-on-surface hover:bg-surface-container-highest"
+    >
+      Add channel
+    </button>
+  </div>
+
+  <p class="text-on-surface-variant text-xs">
+    Delivered on a new incident, and again when it resolves — never on every repeat while still firing.
+  </p>
+
+  @if (loading()) {
+    <p class="text-on-surface-variant text-xs">Loading…</p>
+  } @else if (loadError()) {
+    <p class="text-error text-xs">{{ loadError() }}</p>
+  } @else {
+    @if (channels().length === 0) {
+      <p class="text-on-surface-variant text-xs">No channels configured yet.</p>
+    }
+
+    @for (channel of channels(); track channel.id) {
+      <div class="flex flex-col gap-3 rounded-xs border border-outline-variant bg-surface-container-lowest p-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+        <div class="flex flex-col gap-1">
+          <div class="flex items-center gap-2">
+            <span class="font-jetbrains text-on-surface text-xs">{{ channel.name }}</span>
+            <span class="rounded-xs bg-surface-container-highest px-1.5 py-0.5 text-[10px] uppercase text-on-surface-variant">
+              {{ channel.type }}
+            </span>
+            @if (!channel.enabled) {
+              <span class="rounded-xs bg-tertiary/15 px-1.5 py-0.5 text-[10px] uppercase text-tertiary">disabled</span>
+            }
+          </div>
+          <span class="text-on-surface-variant text-[11px]">{{ channel.severities.join(', ') }}</span>
+        </div>
+
+        <div class="flex shrink-0 items-center gap-2">
+          @if (confirmingDeleteId() === channel.id) {
+            <span class="text-error text-xs">Delete?</span>
+            <button
+              type="button"
+              (click)="cancelDelete()"
+              class="rounded-xs border border-outline-variant px-2 py-1 font-jetbrains text-[11px] uppercase text-on-surface hover:bg-surface-container-highest"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              (click)="confirmDelete(channel.id)"
+              class="rounded-xs bg-error px-2 py-1 font-jetbrains text-[11px] uppercase text-on-error"
+            >
+              Confirm
+            </button>
+          } @else {
+            <button
+              type="button"
+              (click)="openForm(channel)"
+              class="rounded-xs border border-outline-variant px-2 py-1 font-jetbrains text-[11px] uppercase text-on-surface hover:bg-surface-container-highest"
+            >
+              Edit
+            </button>
+            <button
+              type="button"
+              (click)="toggleEnabled(channel)"
+              class="rounded-xs border border-outline-variant px-2 py-1 font-jetbrains text-[11px] uppercase text-on-surface hover:bg-surface-container-highest"
+            >
+              {{ channel.enabled ? 'Disable' : 'Enable' }}
+            </button>
+            <button
+              type="button"
+              (click)="startDelete(channel.id)"
+              class="rounded-xs border border-error/40 px-2 py-1 font-jetbrains text-[11px] uppercase text-error hover:bg-error/10"
+            >
+              Delete
+            </button>
+          }
+        </div>
+      </div>
+    }
+  }
+</div>

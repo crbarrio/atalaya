@@ -1,0 +1,105 @@
+<div class="flex flex-col gap-6">
+  <h1 class="font-jetbrains text-on-surface text-lg uppercase tracking-wide">Incidents</h1>
+
+  @if (incidents.error()) {
+    <p class="rounded-xs border border-error/30 bg-error/10 p-3 text-xs text-error">
+      Could not reach the API. Is the backend running?
+    </p>
+  } @else if (incidents.isLoading() && incidents.value().length === 0) {
+    <p class="text-on-surface-variant text-xs">Loading…</p>
+  } @else {
+    <section class="grid grid-cols-1 gap-4 sm:grid-cols-3">
+      <app-meta-chip icon="warning" label="Total" [value]="incidents.value().length" />
+      <app-meta-chip
+        icon="error"
+        label="Firing"
+        [value]="firing()"
+        [tone]="firing() > 0 ? 'danger' : 'success'"
+      />
+      <app-meta-chip icon="check_circle" label="Resolved" [value]="resolved()" tone="success" />
+    </section>
+
+    @if (incidents.value().length === 0) {
+      <p class="text-on-surface-variant text-xs">
+        Nothing here yet — Alertmanager hasn't sent anything through the webhook.
+      </p>
+    } @else {
+      <div class="overflow-x-auto rounded-xs border border-outline-variant">
+        <table class="w-full text-left text-sm">
+          <thead class="bg-surface-container-lowest text-on-surface-variant font-jetbrains text-xs uppercase">
+            <tr>
+              <th class="p-3">Server</th>
+              <th class="p-3">Alert</th>
+              <th class="p-3">Severity</th>
+              <th class="p-3">Status</th>
+              <th class="p-3">Summary</th>
+              <th class="p-3">Started</th>
+              <th class="w-8 p-3"></th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-outline-variant">
+            @for (incident of incidents.value(); track incident.id) {
+              <tr class="hover:bg-surface-container-low">
+                <td class="text-on-surface-variant p-3">{{ incident.server ?? '—' }}</td>
+                <td class="text-on-surface p-3">{{ incident.alertName }}</td>
+                <td class="p-3">
+                  <span
+                    class="rounded-xs px-2 py-1 font-jetbrains text-[10px] uppercase"
+                    [class]="
+                      incident.severity === 'critical'
+                        ? 'bg-error/10 text-error'
+                        : incident.severity === 'warning'
+                          ? 'bg-tertiary/10 text-tertiary'
+                          : 'bg-surface-container-highest text-on-surface-variant'
+                    "
+                  >
+                    {{ incident.severity }}
+                  </span>
+                </td>
+                <td class="p-3">
+                  <span
+                    class="inline-flex items-center gap-1.5 rounded-xs px-2 py-1 font-jetbrains text-xs uppercase"
+                    [class]="incident.status === 'firing' ? 'bg-error/10 text-error' : 'bg-secondary/10 text-secondary'"
+                  >
+                    <span
+                      class="h-1.5 w-1.5 rounded-full"
+                      [class]="incident.status === 'firing' ? 'bg-error' : 'bg-secondary'"
+                    ></span>
+                    {{ incident.status }}
+                  </span>
+                </td>
+                <td class="text-on-surface-variant p-3">{{ incident.summary ?? '—' }}</td>
+                <td class="text-on-surface-variant p-3">{{ incident.startsAt | relativeTime }}</td>
+                <td class="relative p-3">
+                  @if (incident.status === 'firing') {
+                    <button
+                      type="button"
+                      class="text-on-surface-variant hover:text-on-surface disabled:opacity-50"
+                      [disabled]="silencing() === incident.id"
+                      (click)="toggleMenu(incident.id)"
+                    >
+                      <span class="material-symbols-outlined text-base">notifications_off</span>
+                    </button>
+                    @if (openMenuFor() === incident.id) {
+                      <div class="absolute right-0 top-full z-10 mt-1 flex flex-col rounded-xs border border-outline-variant bg-surface-container-low shadow-lg">
+                        @for (option of silenceOptions; track option.hours) {
+                          <button
+                            type="button"
+                            class="whitespace-nowrap px-3 py-2 text-left text-xs text-on-surface hover:bg-surface-container-highest"
+                            (click)="silence(incident.id, option.hours)"
+                          >
+                            Silence {{ option.label }}
+                          </button>
+                        }
+                      </div>
+                    }
+                  }
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  }
+</div>

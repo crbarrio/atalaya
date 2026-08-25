@@ -1,0 +1,120 @@
+@if (found(); as instance) {
+  <div class="flex max-w-2xl flex-col gap-6">
+    <div>
+      <button
+        type="button"
+        (click)="goBack()"
+        class="inline-flex items-center gap-1 text-on-surface-variant text-xs hover:text-on-surface"
+      >
+        <span class="material-symbols-outlined text-base">arrow_back</span>
+        Back
+      </button>
+
+      <div class="mt-2 text-on-surface-variant text-xs">
+        <a [routerLink]="['/servers', name()]" class="hover:text-on-surface">{{ name() }}</a>
+        <span class="mx-1">/</span>
+        <span class="text-on-surface">{{ instance.name }}</span>
+      </div>
+      <div class="mt-2 flex items-center gap-3">
+        <span class="flex h-10 w-10 items-center justify-center rounded-full bg-surface-container-highest text-on-surface-variant">
+          <span class="material-symbols-outlined text-lg">deployed_code</span>
+        </span>
+        <h1 class="font-jetbrains text-on-surface text-lg uppercase tracking-wide">
+          {{ instance.name }}
+        </h1>
+        <app-state-badge [state]="instance.state" />
+      </div>
+    </div>
+
+    <!-- Meta chips -->
+    <div class="flex flex-wrap gap-6 rounded-xs border border-outline-variant bg-surface-container-low p-4">
+      <app-meta-chip size="chip" icon="apps" label="App" [value]="instance.app ?? '—'" />
+      @if (instance.client) {
+        <app-meta-chip size="chip" icon="business" label="Client" [value]="instance.client" />
+      }
+      @if (instance.database) {
+        <app-meta-chip
+          size="chip"
+          icon="database"
+          label="Database"
+          [value]="instance.database.engine + ' · ' + instance.database.name"
+        />
+      }
+    </div>
+
+    <!-- Version -->
+    <div class="rounded-xs border border-outline-variant bg-surface-container-low p-4">
+      <span class="font-jetbrains text-on-surface-variant block text-xs uppercase">Version</span>
+      <div class="mt-2 grid grid-cols-2 gap-4">
+        <div>
+          <span class="text-on-surface-variant text-xs">Current</span>
+          <p class="font-jetbrains text-on-surface text-xs">{{ instance.version ?? '—' }}</p>
+          <p class="text-on-surface-variant text-xs">
+            deployed {{ instance.deployedAt | relativeTime }}
+          </p>
+        </div>
+        <div>
+          <span class="text-on-surface-variant text-xs">Previous</span>
+          <p class="font-jetbrains text-on-surface text-xs">{{ instance.previousVersion ?? '—' }}</p>
+          <p class="text-on-surface-variant text-xs">
+            deployed {{ instance.previousAt | relativeTime }}
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Deploy history -->
+    <app-deploy-history [entries]="deployHistory.value()" [loading]="deployHistory.isLoading()" />
+
+    <!-- Domains -->
+    <div class="rounded-xs border border-outline-variant bg-surface-container-low p-4">
+      <span class="font-jetbrains text-on-surface-variant block text-xs uppercase">Domains</span>
+      <ul class="mt-2 flex flex-wrap gap-2">
+        @for (domain of instance.domains; track domain) {
+          <li>
+            <a
+              href="https://{{ domain }}"
+              target="_blank"
+              rel="noopener"
+              class="rounded-xs bg-primary/10 px-2 py-1 text-primary text-xs hover:underline"
+            >
+              {{ domain }}
+            </a>
+          </li>
+        }
+      </ul>
+    </div>
+
+    <!-- Volumes -->
+    <div class="rounded-xs border border-outline-variant bg-surface-container-low p-4">
+      <span class="font-jetbrains text-on-surface-variant block text-xs uppercase">Volumes</span>
+      @if (instance.volumes === null) {
+        <p class="mt-2 text-on-surface-variant text-xs">No backup has run for this instance yet.</p>
+      } @else if (instance.volumes.length === 0) {
+        <p class="mt-2 text-on-surface-variant text-xs">This instance declares no named volumes.</p>
+      } @else {
+        <ul class="mt-2 flex flex-col gap-1">
+          @for (volume of instance.volumes; track volume.name) {
+            <li class="flex items-center justify-between gap-4 font-jetbrains text-xs">
+              <span class="text-on-surface">{{ volume.name }}</span>
+              <span class="text-on-surface-variant">{{ volume.sizeBytes | bytes }}</span>
+            </li>
+          }
+        </ul>
+        <p class="mt-2 text-on-surface-variant text-[11px]">
+          Sizes as of the last backup ({{ server()?.backup?.at | relativeTime }}), not live.
+        </p>
+      }
+    </div>
+
+    <p class="text-on-surface-variant text-xs">Read {{ instance.fetchedAt | relativeTime }}</p>
+  </div>
+} @else if (detail.isLoading()) {
+  <p class="text-on-surface-variant text-xs">Loading {{ instance() }}…</p>
+} @else if (serverNotFound()) {
+  <p class="text-on-surface-variant">Unknown server '{{ name() }}'.</p>
+} @else if (detail.error()) {
+  <p class="text-error text-xs">Could not reach the API. Is the backend running?</p>
+} @else {
+  <p class="text-on-surface-variant">Unknown instance '{{ instance() }}' on '{{ name() }}'.</p>
+}

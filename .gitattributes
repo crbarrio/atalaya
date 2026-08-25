@@ -1,0 +1,10 @@
+# This repo is edited on Windows and executed on Linux.
+#
+# With core.autocrlf=true, git would convert these files to CRLF on checkout,
+# and a .sh script with CRLF fails on Linux with a useless
+# "$'\r': command not found". Force LF.
+
+*.sh    text eol=lf
+*.yml   text eol=lf
+*.yaml  text eol=lf
+*.json  text eol=lf

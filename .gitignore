@@ -1,0 +1,38 @@
+node_modules/
+dist/
+build/
+.env
+.env.*
+*.env
+!.env.example
+!*.env.example
+
+.playwright-mcp/
+
+# keys and secrets — never in the repo
+*.pem
+*.key
+id_*
+secrets/
+
+# local database — the SQLite file IS the database
+*.sqlite
+*.sqlite3
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# generated Prisma client: rebuilt by `prisma generate`
+backend/src/generated/
+
+# Prometheus targets: generated from the Server table, not fixed config
+infra/homeserver/prometheus/targets/*.json
+
+# logs and temporary files
+*.log
+npm-debug.log*
+.DS_Store
+Thumbs.db
+.angular/
+coverage/

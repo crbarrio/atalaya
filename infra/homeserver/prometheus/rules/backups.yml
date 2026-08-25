@@ -1,0 +1,52 @@
+# Backup rules.
+#
+# These exist because of a real incident: `marsella-test` went a day without a
+# backup and it was found only by opening the status file by hand. The cron
+# discards its output, so a broken backup is silent by construction — the whole
+# point of publishing the result as a metric is that silence stops being an
+# answer.
+
+groups:
+  - name: backups
+    rules:
+      - alert: BackupFailed
+        expr: stack_backup_success == 0
+        for: 30m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.server }}: the last {{ $labels.mode }} backup failed"
+          description: >-
+            Check backups/last_status on {{ $labels.server }} for the reason. The
+            timestamp of the last good backup is deliberately left untouched by a
+            failure, so NoRecentBackup still tells the truth.
+
+      # 26 hours, not 24: the cron runs at 02:01 and a run takes minutes, so a
+      # threshold of exactly a day would fire on jitter alone.
+      - alert: NoRecentIncrementalBackup
+        expr: >-
+          time() - stack_backup_last_success_timestamp_seconds{mode="incremental"}
+          > 26 * 3600
+        for: 1h
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.server }}: no good incremental backup for over a day"
+          description: >-
+            This is the one that catches a cron that stopped firing, which no
+            amount of watching the backup output would reveal.
+
+      # Full backups run on the 1st, so anything past 40 days means a monthly
+      # run was missed entirely.
+      - alert: NoRecentFullBackup
+        expr: >-
+          time() - stack_backup_last_success_timestamp_seconds{mode="full"}
+          > 40 * 24 * 3600
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.server }}: no good full backup for over 40 days"
+          description: >-
+            The incremental chain hangs off the monthly full one, so this also
+            means the dailies are building on an increasingly old base.

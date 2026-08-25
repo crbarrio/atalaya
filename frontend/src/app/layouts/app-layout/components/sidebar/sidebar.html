@@ -1,0 +1,72 @@
+<!-- Backdrop: mobile only, closes the drawer on click. Never rendered at lg: and up, where the sidebar is static and always visible. -->
+@if (mobileNav.open()) {
+    <div
+        class="fixed inset-0 z-40 bg-black/50 lg:hidden"
+        (click)="mobileNav.close()"
+    ></div>
+}
+
+<nav
+    class="fixed inset-y-0 left-0 z-50 flex h-screen w-72 flex-col border-r border-outline-variant bg-surface-container transition-transform duration-200 lg:sticky lg:top-0 lg:z-auto lg:w-64 lg:translate-x-0 lg:transition-none"
+    [class.-translate-x-full]="!mobileNav.open()"
+    [class.translate-x-0]="mobileNav.open()"
+>
+    <div class="px-4 py-6">
+        <div class="flex items-center justify-between">
+            <div class="flex items-end gap-3">
+                <div class="flex h-10 w-10 p-0.5 items-center justify-center rounded-xs">
+                    <img src="logo_navbar.png" alt="Logo">
+                </div>
+                <div class="text-primary">
+                    <h1 class="text-lg font-extrabold tracking-tight whitespace-nowrap">
+                        Atalaya
+                    </h1>
+                </div>
+            </div>
+            <button
+                type="button"
+                (click)="mobileNav.close()"
+                class="text-on-surface-variant p-1 lg:hidden"
+                aria-label="Close menu"
+            >
+                <span class="material-symbols-outlined">close</span>
+            </button>
+        </div>
+        <p class="text-on-surface-variant mt-1">Infrastructure Monitoring</p>
+    </div>
+
+    <div class="flex-1 px-3">
+        <ul class="flex flex-col gap-1">
+            @for (section of sections; track section.path) {
+            <li>
+                <a class="flex items-center px-4 py-3 rounded-xs text-on-surface-variant font-bold hover:bg-surface-container-high transition-colors"
+                    [routerLink]="section.path"
+                    routerLinkActive="text-primary bg-surface-container-high border-r-2 border-primary"
+                    (click)="mobileNav.close()">
+                    <span class="material-symbols-outlined mr-4">{{section.icon}}</span>
+                    <span class="whitespace-nowrap">
+                        {{ section.label }}
+                    </span>
+                </a>
+            </li>
+            }
+        </ul>
+    </div>
+
+
+    <div class="border-t border-outline-variant px-3 py-4">
+        <ul class="sidebar-nav-list">
+            <li>
+                <a class="flex items-center px-4 py-3 rounded-xs text-on-surface-variant font-bold hover:bg-surface-container-high transition-colors"
+                    routerLink="/settings"
+                    routerLinkActive="text-primary bg-surface-container-high border-r-2 border-primary"
+                    (click)="mobileNav.close()">
+                    <span class="material-symbols-outlined mr-4">settings</span>
+                    <span class="whitespace-nowrap">
+                        Settings
+                    </span>
+                </a>
+            </li>
+        </ul>
+    </div>
+</nav>

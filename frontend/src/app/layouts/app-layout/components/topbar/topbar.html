@@ -1,0 +1,94 @@
+<header class="p-4 flex justify-between items-center gap-3 h-16 w-full border-b border-outline-variant z-40 shrink-0">
+
+    <button
+        type="button"
+        (click)="mobileNav.toggle()"
+        class="text-on-surface-variant hover:text-primary p-2 rounded-xs hover:bg-surface-container-high lg:hidden"
+        aria-label="Open menu"
+    >
+        <span class="material-symbols-outlined">menu</span>
+    </button>
+
+    <div class="relative flex min-w-0 flex-1 items-center sm:flex-none">
+        <!-- Search Bar -->
+        <div
+            class="flex w-full items-center bg-surface-container-lowest border border-outline-variant rounded-xs px-3 py-1.5 focus-within:border-primary transition-colors sm:w-64">
+            <span class="material-symbols-outlined text-on-surface-variant mr-2 shrink-0">search</span>
+            <input
+                [value]="query()"
+                (input)="query.set($any($event.target).value)"
+                (focus)="onFocus()"
+                (blur)="onBlur()"
+                autocomplete="off"
+                class="bg-transparent border-none focus:ring-0 text-sm text-on-surface placeholder:text-on-surface-variant w-full min-w-0 p-0 focus:outline-none"
+                placeholder="Search resources..." type="text" />
+        </div>
+
+        @if (dropdownOpen() && query().trim()) {
+            <div
+                class="absolute top-full left-0 mt-1 max-h-96 w-80 max-w-[90vw] overflow-auto rounded-xs border border-outline-variant bg-surface-container-lowest shadow-lg z-50"
+            >
+                @if (results.isLoading()) {
+                    <p class="text-on-surface-variant p-3 text-xs">Searching…</p>
+                } @else if (!hasResults()) {
+                    <p class="text-on-surface-variant p-3 text-xs">No matches for "{{ query() }}".</p>
+                } @else {
+                    @if (results.value().servers.length > 0) {
+                        <div class="text-on-surface-variant px-3 pt-2 pb-1 font-jetbrains text-[10px] uppercase tracking-wide">Servers</div>
+                        @for (server of results.value().servers; track server.name) {
+                            <button
+                                type="button"
+                                (click)="goToServer(server.name)"
+                                class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-on-surface hover:bg-surface-container-high"
+                            >
+                                <span class="material-symbols-outlined text-on-surface-variant text-base">dns</span>
+                                <span>server: <span class="font-jetbrains">{{ server.name }}</span></span>
+                            </button>
+                        }
+                    }
+                    @if (results.value().instances.length > 0) {
+                        <div class="text-on-surface-variant px-3 pt-2 pb-1 font-jetbrains text-[10px] uppercase tracking-wide">Apps</div>
+                        @for (instance of results.value().instances; track instance.server + '/' + instance.name) {
+                            <button
+                                type="button"
+                                (click)="goToInstance(instance.server, instance.name)"
+                                class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-on-surface hover:bg-surface-container-high"
+                            >
+                                <span class="material-symbols-outlined text-on-surface-variant text-base">deployed_code</span>
+                                <span class="flex flex-col">
+                                    <span class="font-jetbrains">{{ instance.name }}</span>
+                                    <span class="text-on-surface-variant text-[11px]">on {{ instance.server }}</span>
+                                </span>
+                            </button>
+                        }
+                    }
+                }
+            </div>
+        }
+    </div>
+
+    <div class="flex shrink-0 items-center gap-2 sm:gap-4">
+        <button class="flex gap-2 text-on-surface-variant hover:text-primary transition-opacity opacity-80 items-center justify-center p-2 rounded-xs hover:bg-surface-container-high">
+            <span class="material-symbols-outlined">account_circle</span>
+
+            <div class="hidden text-sm font-medium text-on-surface-variant md:block">
+                @if (session(); as current) {
+                    <span>{{ current.login }}</span>
+
+                } @else {
+                    <span class="text-on-surface-variant">no identity</span>
+                }
+            </div>
+        </button>
+        <a (click)="openFormModal()"
+            class="flex gap-2 items-center bg-primary text-on-primary font-jetbrains text-xs px-3 py-2 rounded-xs hover:opacity-90 transition-opacity uppercase tracking-wider sm:px-4">
+            <span class="material-symbols-outlined text-xs">add</span>
+            <span class="hidden sm:inline">Register server</span>
+        </a>
+    </div>
+
+
+
+    
+
+</header>

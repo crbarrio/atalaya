@@ -1,0 +1,368 @@
+@if (server(); as server) {
+  <div class="flex flex-col gap-6">
+    <div>
+      <button
+        type="button"
+        (click)="goBack()"
+        class="inline-flex items-center gap-1 text-on-surface-variant text-xs hover:text-on-surface"
+      >
+        <span class="material-symbols-outlined text-base">arrow_back</span>
+        Back
+      </button>
+
+      <div class="mt-2 text-on-surface-variant text-xs">
+        <a routerLink="/overview" class="hover:text-on-surface">Overview</a>
+        <span class="mx-1">/</span>
+        <span class="text-on-surface">{{ server.name }}</span>
+      </div>
+
+      <div class="mt-2 flex items-start justify-between">
+        <div class="flex items-center gap-3">
+          <span
+            class="flex h-10 w-10 items-center justify-center rounded-full"
+            [class]="{
+              'bg-secondary/15 text-secondary': avatarTone() === 'success',
+              'bg-tertiary/15 text-tertiary': avatarTone() === 'warning',
+              'bg-error/15 text-error': avatarTone() === 'danger',
+              'bg-surface-container-highest text-on-surface-variant': avatarTone() === 'default'
+            }"
+          >
+            <span class="material-symbols-outlined text-lg">{{ isHost() ? 'home' : 'dns' }}</span>
+          </span>
+          <h1 class="font-jetbrains text-on-surface text-lg uppercase tracking-wide">
+            {{ server.name }}
+          </h1>
+          @if (isHost()) {
+            <span class="rounded-xs bg-surface-container-highest px-1.5 py-0.5 font-jetbrains text-[10px] uppercase text-on-surface-variant">
+              host
+            </span>
+          }
+        </div>
+        <div class="flex flex-col items-end gap-2">
+          <app-state-badge [state]="server.health" />
+          @if (!isHost()) {
+            <span class="text-on-surface-variant text-xs">Read {{ server.lastSeenAt | relativeTime }}</span>
+          }
+        </div>
+      </div>
+    </div>
+
+    @if (server.lastError) {
+      <div class="rounded-xs border border-error/30 bg-error/10 p-3 font-jetbrains text-xs text-error">
+        {{ server.lastError }}
+      </div>
+    }
+
+    @if (alerts().length > 0) {
+      <div class="flex flex-col gap-2 rounded-xs border border-error/30 bg-error/10 p-3">
+        @for (alert of alerts(); track alert.name) {
+          <div class="flex items-center gap-2 font-jetbrains text-xs">
+            <span
+              class="rounded-xs px-1.5 py-0.5 text-[10px] uppercase"
+              [class]="alert.state === 'firing' ? 'bg-error/20 text-error' : 'bg-tertiary/20 text-tertiary'"
+            >
+              {{ alert.state }}
+            </span>
+            <span class="text-on-surface">{{ alert.summary }}</span>
+          </div>
+        }
+      </div>
+    }
+
+    @if (downCollectors().length > 0) {
+      <div class="rounded-xs border border-tertiary/30 bg-tertiary/10 p-3 font-jetbrains text-xs text-tertiary">
+        Prometheus cannot scrape {{ downCollectors().join(' or ') }} on this server — metrics below may be stale or missing.
+      </div>
+    }
+
+    <div class="flex flex-wrap justify-between gap-6 rounded-xs border border-outline-variant bg-surface-container-low p-4">
+      <app-meta-chip size="chip" icon="lan" label="Host" [value]="server.host" />
+      <app-meta-chip size="chip" icon="vpn_lock" label="Tailnet IP" [value]="server.tailnetIp" />
+      @if (uptime()) {
+        <app-meta-chip size="chip" icon="schedule" label="Uptime" [value]="uptime()!" />
+      }
+      @if (load()) {
+        <app-meta-chip size="chip" icon="speed" label="Load (1m/5m)" [value]="load()!" />
+      }
+      @if (!isHost()) {
+        <app-meta-chip
+          size="chip"
+          icon="history"
+          label="Backup"
+          [value]="
+            (server.backup.status ?? 'NEVER') + ' · ' + (server.backup.mode ?? '—') +
+            (backupDuration() ? ' · ' + backupDuration() : '')
+          "
+        />
+      }
+    </div>
+
+    @if (metrics.value(); as m) {
+      <section class="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <app-usage-bar
+          icon="memory"
+          label="CPU"
+          [percent]="cpuPercent()"
+          [detail]="cpuPercent() !== null ? (cpuPercent() | number: '1.0-1') + '%' : '—'"
+        />
+        <app-usage-bar
+          icon="dns"
+          label="RAM"
+          [percent]="memoryPercent()"
+          [detail]="
+            (m.server.memory.usedBytes | bytes) + ' / ' + (m.server.memory.totalBytes | bytes) +
+            (memoryDaysRemaining() !== null ? ' · ' + memoryDaysRemaining() + 'd left' : '')
+          "
+        />
+        <app-usage-bar
+          icon="storage"
+          label="Disk"
+          [percent]="diskPercent()"
+          [detail]="
+            (m.server.disk.usedBytes | bytes) + ' / ' + (m.server.disk.totalBytes | bytes) +
+            (diskDaysRemaining() !== null ? ' · ' + diskDaysRemaining() + 'd left' : '')
+          "
+        />
+      </section>
+
+      @if (engine().length > 0) {
+        <div class="flex flex-wrap justify-between gap-6 rounded-xs border border-outline-variant bg-surface-container-low p-4">
+          @for (service of engine(); track service.service) {
+            <app-meta-chip
+              size="chip"
+              [icon]="engineIcon(service.service)"
+              [label]="service.service"
+              [value]="(service.memoryBytes | bytes) + ' · ' + (service.cpuCores | cpuCores)"
+            />
+          }
+        </div>
+      }
+    } @else if (metrics.isLoading()) {
+      <p class="text-on-surface-variant text-xs">Loading metrics…</p>
+    } @else if (metrics.error()) {
+      <p class="text-on-surface-variant text-xs">Metrics unavailable — is Prometheus reachable?</p>
+    }
+
+    <div class="flex items-center justify-end gap-2">
+      @for (range of historyRanges; track range.hours) {
+        <button
+          type="button"
+          (click)="historyHours.set(range.hours)"
+          class="rounded-xs border px-2 py-1 font-jetbrains text-[11px] uppercase"
+          [class]="
+            historyHours() === range.hours
+              ? 'border-primary bg-primary/10 text-primary'
+              : 'border-outline-variant text-on-surface-variant hover:bg-surface-container-highest'
+          "
+        >
+          {{ range.label }}
+        </button>
+      }
+    </div>
+    <app-history-chart [history]="history.value()" [hours]="historyHours()" [loading]="history.isLoading()" />
+
+    @if (isHost()) {
+      <app-host-containers
+        [containers]="hostContainers.value()"
+        [loading]="hostContainers.isLoading()"
+      />
+    } @else {
+
+    <!-- md and up: the full table. Below that, a stacked card per instance instead — eight columns has no honest narrow-screen layout, only a worse one. -->
+    <div class="hidden overflow-x-auto rounded-xs border border-outline-variant md:block">
+      <table class="w-full text-left text-sm">
+        <thead class="bg-surface-container-lowest text-on-surface-variant font-jetbrains text-xs uppercase">
+          <tr>
+            <th class="p-3">Instance</th>
+            <th class="p-3">App</th>
+            <th class="p-3">Client</th>
+            <th class="p-3">Version</th>
+            <th class="p-3">State</th>
+            <th class="p-3">CPU</th>
+            <th class="p-3">Memory</th>
+            <th class="p-3">Domains</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-outline-variant">
+          @for (instance of server.instances; track instance.name) {
+            <tr
+              [routerLink]="['/servers', server.name, instance.name]"
+              class="group cursor-pointer hover:bg-surface-container-low"
+            >
+              <td class="p-3">
+                <a
+                  [routerLink]="['/servers', server.name, instance.name]"
+                  (click)="$event.stopPropagation()"
+                  class="inline-flex items-center gap-1 text-on-surface group-hover:text-primary"
+                >
+                  {{ instance.name }}
+                  <span class="material-symbols-outlined text-[14px] opacity-0 transition-opacity group-hover:opacity-100">
+                    chevron_right
+                  </span>
+                </a>
+              </td>
+              <td class="text-on-surface-variant p-3">{{ instance.app }}</td>
+              <td class="text-on-surface-variant p-3">{{ instance.client ?? '—' }}</td>
+              <td class="p-3">
+                <span class="font-jetbrains rounded-xs bg-surface-container-highest px-2 py-1 text-on-surface-variant text-[11px]">
+                  {{ instance.version ?? '—' }}
+                </span>
+                @if (instance.previousVersion && instance.previousVersion !== instance.version) {
+                  <span class="ml-1 text-on-surface-variant text-[10px]" [title]="'Previous: ' + instance.previousVersion">
+                    (prev {{ instance.previousAt | relativeTime }})
+                  </span>
+                }
+              </td>
+              <td class="p-3"><app-state-badge [state]="instance.state" /></td>
+              <td class="text-on-surface-variant p-3">{{ instanceUsage().get(instance.name)?.cpuCores | cpuCores }}</td>
+              <td class="text-on-surface-variant p-3">{{ instanceUsage().get(instance.name)?.memoryBytes | bytes }}</td>
+              <td class="p-3">
+                <div class="flex flex-wrap gap-2">
+                  @for (domain of instance.domains; track domain) {
+                    <a
+                      href="https://{{ domain }}"
+                      target="_blank"
+                      rel="noopener"
+                      (click)="$event.stopPropagation()"
+                      class="rounded-xs bg-primary/10 px-2 py-1 text-primary text-xs hover:underline"
+                    >
+                      {{ domain }}
+                    </a>
+                  }
+                </div>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+
+    <div class="flex flex-col gap-3 md:hidden">
+      @for (instance of server.instances; track instance.name) {
+        <div
+          [routerLink]="['/servers', server.name, instance.name]"
+          class="flex cursor-pointer flex-col gap-2 rounded-xs border border-outline-variant bg-surface-container-low p-3"
+        >
+          <div class="flex items-center justify-between gap-2">
+            <span class="font-jetbrains text-on-surface text-sm">{{ instance.name }}</span>
+            <app-state-badge [state]="instance.state" />
+          </div>
+          <div class="text-on-surface-variant text-xs">
+            {{ instance.app }}
+            @if (instance.client) {
+              · {{ instance.client }}
+            }
+          </div>
+          <div class="flex flex-wrap items-center gap-2">
+            <span class="font-jetbrains rounded-xs bg-surface-container-highest px-2 py-1 text-on-surface-variant text-[11px]">
+              {{ instance.version ?? '—' }}
+            </span>
+            @if (instance.previousVersion && instance.previousVersion !== instance.version) {
+              <span class="text-on-surface-variant text-[10px]">(prev {{ instance.previousAt | relativeTime }})</span>
+            }
+          </div>
+          <div class="text-on-surface-variant flex gap-4 text-xs">
+            <span>CPU {{ instanceUsage().get(instance.name)?.cpuCores | cpuCores }}</span>
+            <span>Mem {{ instanceUsage().get(instance.name)?.memoryBytes | bytes }}</span>
+          </div>
+          @if (instance.domains.length > 0) {
+            <div class="flex flex-wrap gap-2">
+              @for (domain of instance.domains; track domain) {
+                <a
+                  href="https://{{ domain }}"
+                  target="_blank"
+                  rel="noopener"
+                  (click)="$event.stopPropagation()"
+                  class="rounded-xs bg-primary/10 px-2 py-1 text-primary text-xs hover:underline"
+                >
+                  {{ domain }}
+                </a>
+              }
+            </div>
+          }
+        </div>
+      }
+    </div>
+
+    <!-- Deregistering is a stack-server operation: it hands back a cleanup
+         script for a machine atalaya provisioned. This one it did not. -->
+    <div class="flex flex-col gap-3 rounded-xs border border-error/30 bg-error/5 p-4">
+      <h2 class="font-jetbrains text-error text-sm uppercase tracking-wide">Danger zone</h2>
+
+      @if (!confirmingDeregister()) {
+        <div class="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+          <p class="text-on-surface-variant text-xs">
+            Drops '{{ server.name }}' from the registry — the machine itself is left untouched.
+          </p>
+          <button
+            type="button"
+            (click)="startDeregisterConfirm()"
+            class="shrink-0 rounded-xs border border-error/40 px-3 py-1.5 font-jetbrains text-[11px] uppercase text-error hover:bg-error/10"
+          >
+            Deregister
+          </button>
+        </div>
+      } @else {
+        <div class="flex flex-col gap-3">
+          <p class="text-error text-xs">
+            Deregister '{{ server.name }}' — Prometheus stops scraping it and its history is dropped. Sure?
+          </p>
+
+          <div class="flex flex-col items-start gap-3 rounded-xs border border-outline-variant bg-surface-container-low p-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+            <p class="text-on-surface-variant text-xs">
+              The machine keeps running node_exporter and cAdvisor until told otherwise —
+              deregistering only removes it from atalaya. Download the same artifact used to set it
+              up and run it with <code class="text-on-surface">--uninstall</code> to remove them, before or after.
+            </p>
+            <a
+              [href]="cleanupScriptUrl()"
+              download
+              (click)="cleanupDownloaded.set(true)"
+              class="shrink-0 inline-flex items-center gap-2 rounded-xs border border-outline-variant px-3 py-1.5 font-jetbrains text-[11px] uppercase text-on-surface hover:bg-surface-container-highest"
+            >
+              <span class="material-symbols-outlined text-base">download</span>
+              Cleanup script
+            </a>
+          </div>
+
+          @if (!cleanupDownloaded()) {
+            <p class="text-on-surface-variant text-xs">
+              Download the cleanup script above before deregistering, so you still have it once the machine drops off this list.
+            </p>
+          }
+
+          <div class="flex items-center justify-end gap-2">
+            <button
+              type="button"
+              (click)="confirmingDeregister.set(false)"
+              [disabled]="deregistering()"
+              class="rounded-xs border border-outline-variant px-3 py-1.5 font-jetbrains text-[11px] uppercase text-on-surface hover:bg-surface-container-highest disabled:opacity-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              (click)="deregister()"
+              [disabled]="deregistering() || !cleanupDownloaded()"
+              [title]="!cleanupDownloaded() ? 'Download the cleanup script first' : ''"
+              class="rounded-xs bg-error px-3 py-1.5 font-jetbrains text-[11px] uppercase text-on-error disabled:opacity-50"
+            >
+              {{ deregistering() ? 'Deregistering…' : 'Yes, deregister' }}
+            </button>
+          </div>
+        </div>
+      }
+
+      @if (deregisterError()) {
+        <p class="text-error text-xs">{{ deregisterError() }}</p>
+      }
+    </div>
+    }
+  </div>
+} @else if (detail.isLoading()) {
+  <p class="text-on-surface-variant text-xs">Loading {{ name() }}…</p>
+} @else if (notFound()) {
+  <p class="text-on-surface-variant">Unknown server '{{ name() }}'.</p>
+} @else if (detail.error()) {
+  <p class="text-error text-xs">Could not reach the API. Is the backend running?</p>
+}

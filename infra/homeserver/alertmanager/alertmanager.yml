@@ -1,0 +1,34 @@
+# Alertmanager forwards everything to atalaya over one webhook, and atalaya
+# sends the actual notification — see *Where the configuration lives* in
+# PLAN.md. This file stays short and rarely touched: routing by recipient and
+# severity is a database table in atalaya, not a routing tree here.
+#
+# What this file keeps is the part Alertmanager is good at and we do not want
+# to reimplement: grouping, deduplication, and repeat intervals.
+
+route:
+  receiver: atalaya-webhook
+  # One notification for "this server is down" rather than one per alert that
+  # implies it — see *Alert fatigue* in PLAN.md.
+  group_by: ['alertname', 'server']
+  group_wait: 30s
+  group_interval: 5m
+  # Ordinary alerts: read when you look, not pushed every few minutes.
+  repeat_interval: 4h
+
+  routes:
+    # The watchdog heartbeat needs its own short, fixed repeat — see
+    # *Watching the watchman* in PLAN.md. Period 5 min, grace 15 min on the
+    # healthchecks.io side.
+    - matchers:
+        - alertname = "Watchdog"
+      receiver: atalaya-webhook
+      group_wait: 0s
+      group_interval: 5m
+      repeat_interval: 5m
+
+receivers:
+  - name: atalaya-webhook
+    webhook_configs:
+      - url: http://127.0.0.1:3000/api/webhooks/alertmanager
+        send_resolved: true

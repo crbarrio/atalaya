@@ -1,0 +1,61 @@
+<div class="flex flex-col gap-6">
+  <h1 class="font-jetbrains text-on-surface text-lg uppercase tracking-wide">Backups</h1>
+
+  @if (error()) {
+    <p class="rounded-xs border border-error/30 bg-error/10 p-3 text-xs text-error">
+      Could not reach the API. Is the backend running?
+    </p>
+  } @else if (isLoading() && servers().length === 0) {
+    <p class="text-on-surface-variant text-xs">Loading…</p>
+  } @else {
+    <section class="grid grid-cols-1 gap-4 sm:grid-cols-3">
+      <app-meta-chip icon="dns" label="Servers" [value]="servers().length" />
+      <app-meta-chip icon="check_circle" label="OK" [value]="ok()" tone="success" />
+      <app-meta-chip
+        [icon]="failing() > 0 ? 'error' : 'check_circle'"
+        label="Failing"
+        [value]="failing()"
+        [tone]="failing() > 0 ? 'danger' : 'success'"
+      />
+    </section>
+
+    <div class="overflow-x-auto rounded-xs border border-outline-variant">
+      <table class="w-full text-left text-sm">
+        <thead class="bg-surface-container-lowest text-on-surface-variant font-jetbrains text-xs uppercase">
+          <tr>
+            <th class="p-3">Server</th>
+            <th class="p-3">Mode</th>
+            <th class="p-3">Status</th>
+            <th class="p-3">When</th>
+            <th class="p-3">Reason</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-outline-variant">
+          @for (server of servers(); track server.name) {
+            <tr class="hover:bg-surface-container-low">
+              <td class="text-on-surface p-3">{{ server.name }}</td>
+              <td class="text-on-surface-variant p-3">{{ server.backup.mode ?? '—' }}</td>
+              <td class="p-3">
+                <span class="inline-flex items-center gap-1.5 rounded-xs px-2 py-1 font-jetbrains text-xs uppercase"
+                      [class]="server.backup.status === 'OK' ? 'bg-secondary/10 text-secondary' : 'bg-error/10 text-error'">
+                  <span class="h-1.5 w-1.5 rounded-full" [class]="server.backup.status === 'OK' ? 'bg-secondary' : 'bg-error'"></span>
+                  {{ server.backup.status ?? 'NEVER' }}
+                </span>
+              </td>
+              <td class="text-on-surface-variant p-3">{{ server.backup.at | relativeTime }}</td>
+              <td class="p-3">
+                @if (server.backup.detail) {
+                  <code class="block rounded-xs border border-error/20 bg-surface-container-lowest px-2 py-1 font-jetbrains text-[11px] text-error">
+                    {{ server.backup.detail }}
+                  </code>
+                } @else {
+                  <span class="text-on-surface-variant text-xs">—</span>
+                }
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+</div>

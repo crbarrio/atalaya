@@ -1,0 +1,152 @@
+# atalaya's whole homeserver stack. Clone the repo and run
+# `docker compose up -d` from this directory — see the README at the repo root.
+#
+# All seven services share `network_mode: host`: atalaya's API is
+# loopback-only, and reaching it from a container requires the host's network
+# namespace. Alertmanager needs that to call atalaya, and Prometheus in turn
+# to reach Alertmanager.
+
+# Pinned rather than defaulting to the directory name: the named volumes are
+# prefixed with it, so running from a different path would otherwise start
+# over with an empty database.
+name: atalaya
+
+services:
+  prometheus:
+    image: prom/prometheus:v3.7.3
+    container_name: prometheus
+    restart: unless-stopped
+    # Same uid the dedicated data disk is owned by.
+    user: "65534:65534"
+    network_mode: host
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus/rules:/etc/prometheus/rules:ro
+      # Read-only on purpose: atalaya will regenerate these files on the host,
+      # Prometheus only ever reads them.
+      - ./prometheus/targets:/etc/prometheus/targets:ro
+      # Dedicated 80 G disk.
+      - /var/lib/prometheus:/prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --web.listen-address=127.0.0.1:9090
+      - --storage.tsdb.retention.time=395d
+      - --storage.tsdb.retention.size=70GB
+      - --web.enable-lifecycle
+
+  alertmanager:
+    image: prom/alertmanager:v0.28.1
+    container_name: alertmanager
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - ./alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - alertmanager-data:/alertmanager
+    command:
+      - --config.file=/etc/alertmanager/alertmanager.yml
+      - --storage.path=/alertmanager
+      - --web.listen-address=127.0.0.1:9093
+
+  blackbox-exporter:
+    image: prom/blackbox-exporter:v0.25.0
+    container_name: blackbox-exporter
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - ./blackbox/blackbox.yml:/etc/blackbox_exporter/config.yml:ro
+    command:
+      - --config.file=/etc/blackbox_exporter/config.yml
+      - --web.listen-address=127.0.0.1:9115
+
+  backend:
+    build:
+      context: ../..
+      dockerfile: infra/homeserver/atalaya/backend.Dockerfile
+    image: atalaya-backend:latest
+    container_name: atalaya-backend
+    restart: unless-stopped
+    network_mode: host
+    # Only the first two vary between installs; they come from `.env` beside
+    # this file (copy `.env.example`), which is gitignored.
+    environment:
+      - FRONTEND_URL=${FRONTEND_URL}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+      - PORT=3000
+      - HOST=127.0.0.1
+      - TRUST_TAILSCALE_HEADER=true
+      - NODE_ENV=production
+      - SSH_KEY_PATH=/app/keys/atalaya_ed25519
+      - PROMETHEUS_URL=http://127.0.0.1:9090
+      - PROMETHEUS_TARGETS_DIR=/app/prometheus-targets
+      - ALERTMANAGER_URL=http://127.0.0.1:9093
+      # Registers this machine as a `host` server on boot. Unset in
+      # development, where it does nothing.
+      - SELF_MONITOR_NAME=homeserver
+      - SELF_MONITOR_NODE_PORT=9100
+      - SELF_MONITOR_CADVISOR_PORT=8081
+    volumes:
+      - atalaya-data:/app/data
+      # One key for the whole fleet; the public half personalises each
+      # registration artifact's `--atalaya-key`.
+      - ${HOME}/.ssh/atalaya_ed25519:/app/keys/atalaya_ed25519:ro
+      - ${HOME}/.ssh/atalaya_ed25519.pub:/app/keys/atalaya_ed25519.pub:ro
+      # Read-write: the one writer of the files Prometheus mounts read-only.
+      - ./prometheus/targets:/app/prometheus-targets
+
+  frontend:
+    build:
+      context: ../..
+      dockerfile: infra/homeserver/atalaya/frontend.Dockerfile
+    image: atalaya-frontend:latest
+    container_name: atalaya-frontend
+    restart: unless-stopped
+    network_mode: host
+    # Start order only: nginx serves regardless, /api/ degrades to a 502.
+    depends_on:
+      - backend
+
+  # This machine's own collectors, as containers rather than via
+  # `infra/fleet/server-setup/`, which refuses to install without a `stack`.
+  node-exporter:
+    image: prom/node-exporter:v1.8.2
+    container_name: node-exporter
+    restart: unless-stopped
+    network_mode: host
+    pid: host
+    volumes:
+      # rslave so mounts appearing after this container starts are still seen.
+      - /:/host:ro,rslave
+    command:
+      - --path.rootfs=/host
+      - --web.listen-address=127.0.0.1:9100
+      # No textfile collector: that carries stack's metrics, absent here.
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.52.1
+    container_name: cadvisor
+    restart: unless-stopped
+    network_mode: host
+    privileged: true
+    devices:
+      - /dev/kmsg
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    command:
+      # 8081, not the fleet's 8080: that is Pi-hole's on this machine.
+      - --listen_ip=127.0.0.1
+      - --port=8081
+      - --docker_only=true
+      - --store_container_labels=false
+      # No --whitelisted_container_labels: nothing here carries `stack.client`.
+      - --housekeeping_interval=30s
+      - --disable_metrics=advtcp,cpu_topology,cpuset,hugetlb,memory_numa,percpu,process,referenced_memory,resctrl,sched,tcp,udp
+
+volumes:
+  alertmanager-data:
+  atalaya-data:

@@ -1,0 +1,70 @@
+# Managed in the atalaya repo: infra/homeserver/prometheus/prometheus.yml
+#
+# Targets are NOT listed here. They live in targets/*.json and are picked up by
+# file-based discovery, which Prometheus re-reads on its own without a restart.
+# That is what lets atalaya register a server from the browser: it rewrites the
+# JSON from its database and Prometheus follows along.
+
+global:
+  # 30 s is the sizing decision behind the storage estimate: roughly 35 GB for
+  # four servers over 395 days. Halving it doubles the disk.
+  scrape_interval: 30s
+  evaluation_interval: 30s
+  external_labels:
+    monitor: atalaya
+
+rule_files:
+  - /etc/prometheus/rules/*.yml
+
+# Both processes run with network_mode: host, each bound to its own 127.0.0.1
+# port — the only way a container can reach atalaya's loopback-only API is to
+# share the host's network namespace, so Alertmanager needs it too, and
+# Prometheus needs it to reach Alertmanager in turn.
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ['127.0.0.1:9093']
+
+scrape_configs:
+  # Prometheus watching itself. Cheap, and the first thing to check when
+  # something looks wrong with the data.
+  - job_name: prometheus
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # Host metrics: CPU, RAM, disk, network, and stack's backup status through
+  # the textfile collector.
+  - job_name: node
+    file_sd_configs:
+      - files:
+          - /etc/prometheus/targets/node.json
+        refresh_interval: 30s
+
+  # Per-container metrics, including the `cliente` label that answers what
+  # each client costs.
+  - job_name: cadvisor
+    file_sd_configs:
+      - files:
+          - /etc/prometheus/targets/cadvisor.json
+        refresh_interval: 30s
+
+  # TLS certificate expiry, one probe per domain, over the public internet —
+  # not through Tailscale, and not per fleet server: blackbox_exporter runs
+  # once, here, and reaches every domain the same way a browser would.
+  # `domains.json` targets are already "domain:443"; relabelling turns that
+  # into the `target` param blackbox_exporter's own /probe endpoint expects.
+  - job_name: blackbox
+    metrics_path: /probe
+    params:
+      module: [tls_connect]
+    file_sd_configs:
+      - files:
+          - /etc/prometheus/targets/domains.json
+        refresh_interval: 30s
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: 127.0.0.1:9115

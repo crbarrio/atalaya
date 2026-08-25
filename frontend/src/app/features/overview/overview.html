@@ -1,0 +1,28 @@
+<div class="flex flex-col gap-6">
+  <h1 class="font-jetbrains text-on-surface text-lg uppercase tracking-wide">Overview</h1>
+
+  @if (error()) {
+    <p class="rounded-xs border border-error/30 bg-error/10 p-3 text-xs text-error">
+      Could not reach the API. Is the backend running?
+    </p>
+  } @else if (isLoading() && servers().length === 0) {
+    <p class="text-on-surface-variant text-xs">Loading…</p>
+  } @else {
+    <section class="grid grid-cols-1 gap-4 sm:grid-cols-3">
+      <app-meta-chip icon="dns" label="Servers" [value]="servers().length" />
+      <app-meta-chip icon="deployed_code" label="Instances" [value]="totalInstances()" />
+      <app-meta-chip
+        icon="warning"
+        label="Issues"
+        [value]="issues()"
+        [tone]="issues() > 0 ? 'danger' : 'success'"
+      />
+    </section>
+
+    <section class="grid grid-cols-1 gap-6 lg:grid-cols-2 xl:grid-cols-3">
+      @for (server of servers(); track server.name) {
+        <app-server-card [server]="server" />
+      }
+    </section>
+  }
+</div>

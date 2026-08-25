@@ -1,0 +1,15 @@
+# Absence of alerts is ambiguous: everything may be fine, or Prometheus may
+# have stopped three days ago. `vector(1)` is always true, so this alert is
+# permanently firing — Alertmanager forwards it as a steady heartbeat through
+# atalaya to healthchecks.io, an external watchman. See *Watching the
+# watchman* in PLAN.md.
+
+groups:
+  - name: watchdog
+    rules:
+      - alert: Watchdog
+        expr: vector(1)
+        labels:
+          severity: none
+        annotations:
+          summary: "This is a heartbeat, not a problem — it should always be firing."

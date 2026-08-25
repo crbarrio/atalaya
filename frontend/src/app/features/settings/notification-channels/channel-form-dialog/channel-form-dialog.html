@@ -1,0 +1,196 @@
+<div class="flex max-h-[90vh] w-[95vw] flex-col bg-surface-container rounded-xs border border-outline shadow-sm sm:w-auto sm:min-w-2xl sm:max-w-6xl">
+  <div class="flex shrink-0 items-center justify-between border-b border-border px-6 py-4">
+    <h2 class="text-lg font-semibold font-jetbrains uppercase">{{ editing ? 'Edit channel' : 'New channel' }}</h2>
+
+    <button
+      type="button"
+      class="rounded-xs border border-outline-variant p-2 text-on-surface flex transition hover:cursor-pointer hover:border-primary hover:bg-surface hover:text-primary"
+      (click)="onCancel()"
+      aria-label="Cerrar modal">
+      <span class="material-symbols-outlined text-xl leading-none">close</span>
+    </button>
+  </div>
+
+  <form (submit)="onSubmit($event)" autocomplete="off" class="flex flex-col flex-1 overflow-auto bg-surface px-6 py-4 gap-4">
+    @if (editing) {
+      <p class="text-on-surface-variant text-xs">
+        Credentials are never sent back to the browser — leave a password or token field blank to keep what is
+        already stored.
+      </p>
+    }
+
+    <div class="flex gap-4">
+      <label class="flex items-center gap-1.5" [class.opacity-50]="!!editing">
+        <input
+          type="radio"
+          name="channel-type"
+          [checked]="model().type === 'email'"
+          [disabled]="!!editing"
+          (change)="setType('email')"
+          class="rounded-xs"
+        />
+        <span class="text-on-surface text-xs">Email</span>
+      </label>
+      <label class="flex items-center gap-1.5" [class.opacity-50]="!!editing">
+        <input
+          type="radio"
+          name="channel-type"
+          [checked]="model().type === 'telegram'"
+          [disabled]="!!editing"
+          (change)="setType('telegram')"
+          class="rounded-xs"
+        />
+        <span class="text-on-surface text-xs">Telegram</span>
+      </label>
+    </div>
+
+    <label class="flex flex-col gap-1">
+      <span class="text-on-surface-variant text-xs uppercase tracking-wide">Name</span>
+      <input
+        [formField]="channelForm.name"
+        placeholder="ionos"
+        autocomplete="off"
+        class="rounded-xs border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface"
+      />
+    </label>
+
+    @if (model().type === 'email') {
+      <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <label class="flex flex-col gap-1">
+          <span class="text-on-surface-variant text-xs uppercase tracking-wide">SMTP host</span>
+          <input
+            [formField]="channelForm.host"
+            placeholder="smtp.ionos.es"
+            autocomplete="off"
+            class="rounded-xs border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface"
+          />
+        </label>
+
+        <label class="flex flex-col gap-1">
+          <span class="text-on-surface-variant text-xs uppercase tracking-wide">Port</span>
+          <input
+            [formField]="channelForm.port"
+            type="number"
+            autocomplete="off"
+            class="rounded-xs border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface"
+          />
+        </label>
+
+        <label class="flex items-center gap-2 self-end pb-2">
+          <input [formField]="channelForm.secure" type="checkbox" class="rounded-xs" />
+          <span class="text-on-surface-variant text-xs">SSL/TLS</span>
+        </label>
+
+        <span></span>
+
+        <label class="flex flex-col gap-1">
+          <span class="text-on-surface-variant text-xs uppercase tracking-wide">User</span>
+          <input
+            [formField]="channelForm.user"
+            placeholder="info@example.com"
+            autocomplete="off"
+            class="rounded-xs border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface"
+          />
+        </label>
+
+        <label class="flex flex-col gap-1">
+          <span class="text-on-surface-variant text-xs uppercase tracking-wide">Password</span>
+          <input
+            [formField]="channelForm.password"
+            type="password"
+            [placeholder]="editing ? 'Leave blank to keep the current password' : ''"
+            autocomplete="new-password"
+            class="rounded-xs border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface"
+          />
+        </label>
+
+        <label class="flex flex-col gap-1">
+          <span class="text-on-surface-variant text-xs uppercase tracking-wide">From</span>
+          <input
+            [formField]="channelForm.from"
+            placeholder="info@example.com"
+            autocomplete="off"
+            class="rounded-xs border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface"
+          />
+        </label>
+
+        <label class="flex flex-col gap-1">
+          <span class="text-on-surface-variant text-xs uppercase tracking-wide">To</span>
+          <input
+            [formField]="channelForm.to"
+            placeholder="info@example.com"
+            autocomplete="off"
+            class="rounded-xs border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface"
+          />
+        </label>
+      </div>
+    } @else {
+      <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <label class="flex flex-col gap-1">
+          <span class="text-on-surface-variant text-xs uppercase tracking-wide">Bot token</span>
+          <input
+            [formField]="channelForm.botToken"
+            [placeholder]="editing ? 'Leave blank to keep the current token' : '123456:AAE…'"
+            autocomplete="off"
+            class="rounded-xs border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface"
+          />
+        </label>
+
+        <label class="flex flex-col gap-1">
+          <span class="text-on-surface-variant text-xs uppercase tracking-wide">Chat id</span>
+          <input
+            [formField]="channelForm.chatId"
+            [placeholder]="editing ? 'Leave blank to keep the current chat id' : '123456789'"
+            autocomplete="off"
+            class="rounded-xs border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface"
+          />
+        </label>
+      </div>
+      <p class="text-on-surface-variant text-xs">
+        Bot token from @BotFather. Chat id: message the bot once, then open
+        <code class="text-on-surface">https://api.telegram.org/bot&lt;token&gt;/getUpdates</code> to read it back.
+      </p>
+    }
+
+    <div class="flex items-center gap-4">
+      <span class="text-on-surface-variant text-xs uppercase tracking-wide">Severities</span>
+      <label class="flex items-center gap-1.5">
+        <input [formField]="channelForm.critical" type="checkbox" class="rounded-xs" />
+        <span class="text-on-surface text-xs">Critical</span>
+      </label>
+      <label class="flex items-center gap-1.5">
+        <input [formField]="channelForm.warning" type="checkbox" class="rounded-xs" />
+        <span class="text-on-surface text-xs">Warning</span>
+      </label>
+    </div>
+
+    @for (field of [channelForm.name, channelForm.host, channelForm.user, channelForm.password, channelForm.from, channelForm.to, channelForm.botToken, channelForm.chatId]; track $index) {
+      @if (field().touched()) {
+        @for (error of field().errors(); track error.kind) {
+          <p class="text-xs text-error">{{ error.message }}</p>
+        }
+      }
+    }
+
+    <div class="flex items-center gap-2 pt-2">
+      <button
+        type="button"
+        (click)="onCancel()"
+        class="rounded-xs border border-outline-variant px-4 py-2 font-jetbrains text-xs uppercase text-on-surface hover:bg-surface-container-highest"
+      >
+        Cancel
+      </button>
+      <button
+        type="submit"
+        [disabled]="channelForm().submitting()"
+        class="rounded-xs bg-primary px-4 py-2 font-jetbrains text-xs uppercase text-on-primary disabled:opacity-50"
+      >
+        @if (channelForm().submitting()) {
+          {{ editing ? 'Saving…' : 'Adding…' }}
+        } @else {
+          {{ editing ? 'Save changes' : 'Add channel' }}
+        }
+      </button>
+    </div>
+  </form>
+</div>

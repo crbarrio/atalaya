@@ -1,0 +1,10 @@
+# One module: a bare TCP+TLS handshake, no HTTP request at all. Cert
+# expiry lives in the TLS handshake itself — an HTTP prober would also have
+# to decide which status codes count as "up" per domain, which is a second
+# question this check does not need to answer.
+modules:
+  tls_connect:
+    prober: tcp
+    timeout: 10s
+    tcp:
+      tls: true

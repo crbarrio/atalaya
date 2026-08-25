@@ -1,0 +1,35 @@
+# Certificate expiry — the last of the four things *Phase 2* in PLAN.md
+# names for the incident inbox to unify: capacity, downed services,
+# certificates, backups.
+#
+# Traefik does not publish this itself (no cert-expiry metric in any current
+# version, and its Prometheus metrics are not even enabled in `stack`'s
+# compose). blackbox_exporter probes the domain directly over the public
+# internet instead — same as a browser would, so it reports what a visitor
+# would actually see, not what the origin server thinks it is serving.
+
+groups:
+  - name: certificates
+    rules:
+      - alert: CertificateExpiringSoon
+        expr: (probe_ssl_earliest_cert_expiry{job="blackbox"} - time()) / 86400 < 14
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.app }} ({{ $labels.instance }}): certificate expires in under 14 days"
+          description: >-
+            Let's Encrypt renews automatically well before this — a real firing
+            means the renewal itself is broken, not just that the clock is
+            ticking.
+
+      - alert: CertificateProbeFailed
+        expr: probe_success{job="blackbox"} == 0
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.app }} ({{ $labels.instance }}): TLS probe failed"
+          description: >-
+            Could not even complete a TLS handshake — DNS, routing, or Traefik
+            itself may be down, not just the certificate.

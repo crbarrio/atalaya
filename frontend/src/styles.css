@@ -1,0 +1,63 @@
+/* You can add global styles to this file, and also import other style files */
+
+@import 'tailwindcss';
+
+@theme {
+
+    --font-jetbrains:                  'JetBrains Mono';
+
+    --color-background:                 #031427;
+    --color-surface:                    #031427;
+
+    --color-primary:                    #adc6ff;
+    --color-on-primary:                 #002e69;
+
+    --color-secondary:                  #4edea3;
+    --color-on-secondary:               #003824;
+
+    --color-tertiary:                   #ffb95f;
+    --color-on-tertiary:                #472a00;
+
+    --color-error:                     #ffb4ab;
+    --color-on-error:                  #690005;
+
+    --color-on-surface:                 #d3e4fe;
+    --color-on-surface-variant:         #c1c6d7;
+    --color-surface-container:          #102034;
+    --color-surface-container-high:     #1b2b3f;
+    --color-surface-container-highest:  #26364a;
+    --color-surface-container-low:      #0b1c30;
+    --color-surface-container-lowest:   #000f21;
+
+    --color-outline:                    #8b90a0;
+    --color-outline-variant:            #414755;
+
+}
+
+@layer base {
+
+    body {
+        @apply text-sm antialiased font-sans bg-background text-on-surface;
+    }
+
+    main {
+        @apply px-4 md:px-7 py-5;
+    }
+
+    .material-symbols-outlined,
+    .material-symbols-filled {
+        font-family: 'Material Symbols Outlined';
+        font-weight: normal;
+        font-style: normal;
+        line-height: 1 !important;
+        letter-spacing: normal;
+        text-transform: none;
+        display: inline-block;
+        white-space: nowrap;
+        -webkit-font-smoothing: antialiased;
+        user-select: none;
+    }
+    .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+    .material-symbols-filled   { font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+
+}
