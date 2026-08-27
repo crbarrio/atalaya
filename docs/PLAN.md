@@ -67,11 +67,15 @@ audit trail, and an inventory cache.
   closed list of subcommands and instance names validated against `state/manifest.json`. No
   interpolating user text into a command.
 - A dedicated SSH user per server, a key exclusive to atalaya, minimal `sudo`. The key lives on
-  `homeserver`, not on a workstation.
-- **atalaya does not provision by itself.** It has no remote `sudo` and needs none: it generates
-  the installation artifact and checks the result, but a person supplies the `sudo`, once. This
-  is not a limitation to be overcome later — it is what stops the panel from becoming a machine
-  capable of installing software as root across the whole fleet.
+  `homeserver`, not on a workstation. Since Phase 3 that `sudo` is exactly one line: the account
+  may run `/usr/local/sbin/atalaya-stack` as `ubuntu`, a root-owned dispatcher holding the list
+  of `stack` subcommands it accepts. No wildcard, and the list is in a file the account cannot
+  write. Details in [stack-integration.md](stack-integration.md).
+- **atalaya does not provision by itself.** It generates the installation artifact and checks the
+  result, but a person supplies the `sudo` that installs it, once. This is not a limitation to be
+  overcome later — it is what stops the panel from becoming a machine capable of installing
+  software as root across the whole fleet. Running a fixed list of `stack` subcommands on an
+  already-provisioned machine is a different thing, and is what the dispatcher above bounds.
 - The artifact is **downloaded and read before being run**. No `curl … | sudo bash`: the
   shortcut normalises running code nobody has looked at as root, and turns any flaw in atalaya
   into direct access to all three servers.
@@ -315,10 +319,20 @@ install path for anyone but this workstation. The repo was made public to suppor
 auditing the history for credentials (none) and replacing real addresses, tailnet names and
 client names with placeholders.
 
-### Phase 3 — Actions
+### Phase 3 — Actions — Done, 2026-08-27
 
-`deploy`, `rollback`, `stop`, `start`, `logs` over SSH, with live output over SSE. Explicit
-confirmation on destructive ones. Everything audited.
+`status`, `versions`, `logs`, `deploy`, `rollback`, `start`, `stop` and `backup` over SSH, with
+live output over SSE, explicit confirmation naming what is about to change, and every mutating
+run recorded in `AuditEntry` — its first writer, having sat unused since the initial migration.
+
+The blocker was never the UI: the `atalaya` account has no docker and cannot read `.env`, so
+everything past `inventory` was unreachable. Solved with a root-owned dispatcher and a single
+wildcard-free sudo rule; the reasoning, the rejected alternatives and what it honestly costs are
+in [stack-integration.md](stack-integration.md).
+
+Out of scope, each for its own reason: **`exec`** is a remote shell and stays prohibited;
+**`retire`** is destructive and needs a type-the-name gate before it is offered; **`add`** writes
+secrets and belongs with Phase 4.
 
 Provisioning is **not here**: it was solved in v1 by generating the artifact instead of running
 it, and there is no intention of later "promoting" it to remote execution.

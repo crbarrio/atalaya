@@ -104,6 +104,27 @@ The monorepo itself: backend, frontend, and what is built so far.
       alert for that disk alone, for the disks that sit near-full or churn by design. Absent
       preference means both on, so a new disk needs no setup. Backend and the reasoning in
       [monitoring.md](monitoring.md).
+- [x] **Actions, with a live console — 2026-08-27**: `deploy`/`rollback`/`stop`/`start`/`logs` on
+      the instance page, `status`/`backup` on the server page. Confirmation is inline rather than
+      a dialog — the same shape the danger zone already proved — and names the instance, the
+      server and, for `rollback`, the exact version it would return to: the buttons look alike
+      and act on different things.
+      `actions/` in the backend gates three things before SSH — the command is in the catalogue,
+      the instance exists (checked against the cache, refreshed once before giving up, which is
+      PLAN.md's requirement and was until now unimplemented), and no other mutating action holds
+      that instance. Streaming is `@Sse()` over an Observable wrapping the same `ssh2` exec;
+      `nginx.conf` had `proxy_buffering off` waiting for it since the infra reorganisation.
+      Output needs real parsing: `stack` colours its output and, under a pty, `docker compose`
+      adds cursor redraws. `shared/console-output.ts` strips escapes, collapses `\r` redraws to
+      what stayed visible, and keeps a chunk that ends mid-line open for the next one. The pty
+      itself was needed to stop `logs` leaking processes — see
+      [stack-integration.md](stack-integration.md) — and it turns every newline into `\r\n`,
+      which the redraw handling first read as "replace this line", rendering every line empty.
+- [x] **Errored resources no longer blank a page — 2026-08-27**: reading `.value()` on a failed
+      `httpResource` throws, and a throw during change detection takes the whole view with it.
+      With Prometheus unreachable, one 500 from the deploy-history request stopped the entire
+      instance page rendering — actions included. Found while testing actions, not by inspection.
+      `shared/resource-value.ts` guards the four reads that could do it.
 
 ## Layout, modelled on `compas`
 

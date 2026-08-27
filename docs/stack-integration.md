@@ -5,8 +5,6 @@ Everything atalaya needs from `stack`, and the changes made there. The repo itse
 
 ## Pending
 
-- [ ] `stack` → export the deployed version per instance as a metric, the same way the backup
-      does. Gives a deployment history for free.
 - [ ] Delete `../stack/MIGRATION.md`: all three servers are migrated and nothing references it.
 
 ## Done
@@ -23,6 +21,14 @@ Everything atalaya needs from `stack`, and the changes made there. The repo itse
       landed.
 - [x] The backup publishes its result as metrics. See below.
 - [x] `stack add --reuse-secrets`, for re-adding a retired instance.
+- [x] `stack` exports the deployed version per instance as a metric, the same way the backup
+      does — `stack_deploy_info{app,version}`, written by `write_deploy_metric()`. Each version
+      becomes its own series, live only while it was deployed, so ranging over it *is* the
+      deployment history with no event log to keep.
+- [x] `backup.sh` measures each volume's size and writes `state/<app>.volumes`, which
+      `inventory.py` reads back. It is the one place with docker access that already walks every
+      volume; the reading account has none.
+- [x] Running `stack` from atalaya, through a dispatcher. See below.
 
 ## The backup as a metric — 2026-08-18
 
@@ -94,6 +100,42 @@ That second point splits the data sources cleanly, and the split is the right on
 
 atalaya already has the metrics engine; liveness is a question for it. Asking SSH would have meant
 either lying or handing the panel the docker socket.
+
+## Running `stack` — the dispatcher, 2026-08-27
+
+`inventory` was designed to fit inside what the `atalaya` account can do: no docker, no `.env`.
+Every other subcommand needs both — `.env` is `600 ubuntu` because it holds the database root
+passwords — so none of them was reachable, and that was the blocker for Phase 3, not the UI.
+
+The account now gets one narrow exception. `setup-server.sh` installs
+`/usr/local/sbin/atalaya-stack`, owned by root, holding the list of subcommands atalaya may run,
+and one sudoers line naming it exactly:
+
+```
+atalaya ALL=(ubuntu) NOPASSWD: /usr/local/sbin/atalaya-stack
+```
+
+No wildcard, so sudo has no pattern to match wrong. The allowlist lives in a file the account
+cannot write, rather than in sudoers globs — historically a rich source of privilege escalation —
+or in atalaya's own code, where a bug would widen what the server accepts.
+
+Allowed: `status`, `versions`, `logs`, `deploy` (optionally `--version <tag>`), `rollback`,
+`start`, `stop`, `backup {full|incremental}`. Instance names and tags must match
+`^[a-z0-9][a-z0-9._-]*$`; arguments are forwarded as an array, never re-split from a string.
+
+**`exec` is absent and must stay absent.** `stack exec` is `docker compose exec <svc>
+<command...>` — a remote shell, which is the one thing PLAN.md prohibits outright. `retire` and
+`add` are absent too: destructive and configuration-writing respectively, each its own decision
+rather than a parameter.
+
+`inventory` deliberately does **not** go through the dispatcher. It still runs directly and
+unprivileged, so the panel keeps reading a server whose dispatcher has not been installed yet —
+which is every server until the artifact is re-run.
+
+What this costs, stated plainly: `ubuntu` is in the docker group, so anything running as `ubuntu`
+is effectively root. The dispatcher's allowlist is the security boundary, and nothing else is.
+`verify()` therefore asserts its refusals rather than assuming them, and `--uninstall` removes
+the privilege along with the collectors.
 
 ## The English migration — 2026-08-18
 
