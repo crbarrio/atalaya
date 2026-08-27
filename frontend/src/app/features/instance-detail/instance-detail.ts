@@ -2,6 +2,7 @@ import { Component, DestroyRef, computed, inject, input, signal } from '@angular
 import { Router, RouterLink } from '@angular/router';
 
 import { ActionCommand } from '../../core/models/action.model';
+import { ActionsService } from '../../core/services/actions.service';
 import { MetricsService } from '../../core/services/metrics.service';
 import { ServersService } from '../../core/services/servers.service';
 import { BytesPipe } from '../../shared/pipes/bytes.pipe';
@@ -42,6 +43,7 @@ export class InstanceDetailPage {
 
   private readonly serversService = inject(ServersService);
   private readonly metricsService = inject(MetricsService);
+  private readonly actionsService = inject(ActionsService);
   private readonly router = inject(Router);
   private readonly destroyRef = inject(DestroyRef);
 
@@ -92,7 +94,36 @@ export class InstanceDetailPage {
     { command: 'start', label: 'Start', hint: 'Bring back the version that was running' },
   ];
 
+  /**
+   * Read on entering the page, so the version card reports what `stack` sees
+   * now. The inventory cache only knows what it last read, which is wrong the
+   * moment anything is deployed outside the panel.
+   */
+  protected readonly versions = this.actionsService.versions(this.name, this.instance);
+
+  /** Undefined while loading, or when stack could not be reached. */
+  protected readonly versionInfo = computed(() => valueOr(this.versions, undefined));
+
+  /** Which tag the deploy confirmation has selected. Null means whatever `stack` would pick. */
+  protected readonly chosenVersion = signal<string | null>(null);
+
+  /**
+   * Tags offered for deploy, newest first. Services of an instance deploy on
+   * the same tag, so the first service's list is the instance's list; a tag
+   * missing from another service would fail in `stack`, not here.
+   */
+  protected readonly availableVersions = computed(
+    () => valueOr(this.versions, undefined)?.services[0]?.versions ?? [],
+  );
+
+  /** Whether a bare deploy would actually change anything. */
+  protected readonly deployWouldChange = computed(() => {
+    const v = valueOr(this.versions, undefined);
+    return v ? v.chosen !== null && v.chosen !== v.running : false;
+  });
+
   protected ask(command: string): void {
+    this.chosenVersion.set(null);
     this.confirming.set(command);
   }
 
@@ -102,9 +133,16 @@ export class InstanceDetailPage {
 
   protected run(command: ActionCommand): void {
     this.confirming.set(null);
-    this.runner.start(this.name(), command, { instance: this.instance() });
+    const version = command === 'deploy' ? (this.chosenVersion() ?? undefined) : undefined;
+    this.runner.start(this.name(), command, { instance: this.instance(), version });
     // The inventory cache still shows the old version until it is re-read.
     if (DESTRUCTIVE.has(command)) this.refreshAfter();
+  }
+
+  /** The raw `stack versions` output, for the detail a dropdown cannot carry. */
+  protected showVersions(): void {
+    this.confirming.set(null);
+    this.runner.start(this.name(), 'versions', { instance: this.instance() });
   }
 
   protected showLogs(): void {
@@ -122,6 +160,7 @@ export class InstanceDetailPage {
       clearInterval(check);
       this.detail.reload();
       this.deployHistory.reload();
+      this.versions.reload();
     }, 1000);
     this.destroyRef.onDestroy(() => clearInterval(check));
   }

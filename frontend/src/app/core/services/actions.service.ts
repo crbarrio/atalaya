@@ -1,9 +1,9 @@
-import { HttpClient } from '@angular/common/http';
-import { Injectable, inject } from '@angular/core';
+import { HttpClient, httpResource, HttpResourceRef } from '@angular/common/http';
+import { Injectable, Signal, inject } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 
 import { API_BASE } from '../http/api.config';
-import { ActionCommand, CommandEvent } from '../models/action.model';
+import { ActionCommand, CommandEvent, StackVersions } from '../models/action.model';
 
 export interface RunOptions {
   instance?: string;
@@ -32,6 +32,17 @@ export interface StreamHandlers {
 @Injectable({ providedIn: 'root' })
 export class ActionsService {
   private readonly http = inject(HttpClient);
+
+  /**
+   * Which versions exist and which one a deploy would pick. Read on entering
+   * an instance page, so the version card reports what `stack` currently sees
+   * rather than only what the inventory cache last recorded.
+   */
+  versions(server: Signal<string>, instance: Signal<string>): HttpResourceRef<StackVersions | undefined> {
+    return httpResource<StackVersions>(
+      () => `${API_BASE}/actions/${server()}/versions/${instance()}/list`,
+    );
+  }
 
   /** Short read-only commands, collected and returned once. */
   run(server: string, command: ActionCommand, options: RunOptions = {}): Promise<{ output: string }> {

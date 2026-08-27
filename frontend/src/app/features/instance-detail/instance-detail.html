@@ -1,5 +1,5 @@
 @if (found(); as instance) {
-  <div class="flex max-w-2xl flex-col gap-6">
+  <div class="flex flex-col gap-6">
     <div>
       <button
         type="button"
@@ -26,7 +26,7 @@
       </div>
     </div>
 
-    <!-- Meta chips -->
+    <!-- Identity, spanning the width: not a column's worth of content. -->
     <div class="flex flex-wrap gap-6 rounded-xs border border-outline-variant bg-surface-container-low p-4">
       <app-meta-chip size="chip" icon="apps" label="App" [value]="instance.app ?? '—'" />
       @if (instance.client) {
@@ -42,147 +42,222 @@
       }
     </div>
 
-    <!-- Version -->
-    <div class="rounded-xs border border-outline-variant bg-surface-container-low p-4">
-      <span class="font-jetbrains text-on-surface-variant block text-xs uppercase">Version</span>
-      <div class="mt-2 grid grid-cols-2 gap-4">
-        <div>
-          <span class="text-on-surface-variant text-xs">Current</span>
-          <p class="font-jetbrains text-on-surface text-xs">{{ instance.version ?? '—' }}</p>
-          <p class="text-on-surface-variant text-xs">
-            deployed {{ instance.deployedAt | relativeTime }}
-          </p>
-        </div>
-        <div>
-          <span class="text-on-surface-variant text-xs">Previous</span>
-          <p class="font-jetbrains text-on-surface text-xs">{{ instance.previousVersion ?? '—' }}</p>
-          <p class="text-on-surface-variant text-xs">
-            deployed {{ instance.previousAt | relativeTime }}
-          </p>
-        </div>
-      </div>
-    </div>
+    <!-- Two columns once there is room: what you do on the left, what you
+         read on the right. One column below lg, as before. -->
+    <div class="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] lg:items-start">
+      <div class="flex flex-col gap-6">
+        <!-- Actions -->
+        <div class="flex flex-col gap-3 rounded-xs border border-outline-variant bg-surface-container-low p-4">
+          <span class="font-jetbrains text-on-surface-variant block text-xs uppercase">Actions</span>
 
-    <!-- Actions -->
-    <div class="flex flex-col gap-3 rounded-xs border border-outline-variant bg-surface-container-low p-4">
-      <span class="font-jetbrains text-on-surface-variant block text-xs uppercase">Actions</span>
-
-      <div class="flex flex-wrap gap-2">
-        @for (action of actions; track action.command) {
-          <button
-            type="button"
-            (click)="ask(action.command)"
-            [disabled]="runner.state() === 'running'"
-            [title]="action.hint"
-            class="rounded-xs border border-outline-variant px-3 py-1.5 font-jetbrains text-[11px] uppercase text-on-surface hover:bg-surface-container-highest disabled:opacity-40"
-          >
-            {{ action.label }}
-          </button>
-        }
-        <button
-          type="button"
-          (click)="showLogs()"
-          [disabled]="runner.state() === 'running'"
-          title="Follow this instance's container logs"
-          class="rounded-xs border border-outline-variant px-3 py-1.5 font-jetbrains text-[11px] uppercase text-on-surface hover:bg-surface-container-highest disabled:opacity-40"
-        >
-          Logs
-        </button>
-      </div>
-
-      <!-- Confirmation, inline rather than a dialog — same shape as the danger
-           zone on the server page. Naming the instance is the point: these
-           buttons all look alike and act on different things. -->
-      @if (confirming(); as pending) {
-        <div class="flex flex-col gap-3 rounded-xs border border-tertiary/40 bg-tertiary/5 p-3">
-          <p class="text-on-surface text-xs">
-            Run <span class="font-jetbrains text-tertiary">{{ pending }}</span> on
-            <span class="font-jetbrains">{{ instance.name }}</span>, on
-            <span class="font-jetbrains">{{ name() }}</span>?
-            @if (pending === 'stop') {
-              <span class="text-on-surface-variant">Its domains stop answering until it is started again.</span>
-            } @else if (pending === 'deploy') {
-              <span class="text-on-surface-variant">This replaces what is running now.</span>
-            } @else if (pending === 'rollback') {
-              <span class="text-on-surface-variant">
-                This goes back to {{ instance.previousVersion ?? 'the previous version' }}.
-              </span>
+          <div class="flex flex-wrap gap-2">
+            @for (action of actions; track action.command) {
+              <button
+                type="button"
+                (click)="ask(action.command)"
+                [disabled]="runner.state() === 'running'"
+                [title]="action.hint"
+                class="rounded-xs border border-outline-variant px-3 py-1.5 font-jetbrains text-[11px] uppercase text-on-surface hover:bg-surface-container-highest disabled:opacity-40"
+              >
+                {{ action.label }}
+              </button>
             }
-          </p>
-          <div class="flex items-center gap-2">
             <button
               type="button"
-              (click)="cancel()"
-              class="rounded-xs border border-outline-variant px-3 py-1.5 font-jetbrains text-[11px] uppercase text-on-surface hover:bg-surface-container-highest"
+              (click)="showVersions()"
+              [disabled]="runner.state() === 'running'"
+              title="Every published version, with sizes and which are downloaded here"
+              class="rounded-xs border border-outline-variant px-3 py-1.5 font-jetbrains text-[11px] uppercase text-on-surface hover:bg-surface-container-highest disabled:opacity-40"
             >
-              Cancel
+              Versions
             </button>
             <button
               type="button"
-              (click)="run($any(pending))"
-              class="rounded-xs bg-primary px-3 py-1.5 font-jetbrains text-[11px] uppercase text-on-primary"
+              (click)="showLogs()"
+              [disabled]="runner.state() === 'running'"
+              title="Follow this instance's container logs"
+              class="rounded-xs border border-outline-variant px-3 py-1.5 font-jetbrains text-[11px] uppercase text-on-surface hover:bg-surface-container-highest disabled:opacity-40"
             >
-              Yes, {{ pending }}
+              Logs
             </button>
           </div>
-        </div>
-      }
 
-      @if (runner.state() !== 'idle') {
-        <app-command-console
-          [title]="runner.command() ?? 'Output'"
-          [lines]="runner.lines()"
-          [state]="runner.state()"
-          [exitCode]="runner.exitCode()"
-          [error]="runner.error()"
-          (stop)="runner.stop()"
-          (clear)="runner.clear()"
-        />
-      }
-    </div>
+          <!-- Confirmation, inline rather than a dialog — same shape as the danger
+               zone on the server page. Naming the instance is the point: these
+               buttons all look alike and act on different things. -->
+          @if (confirming(); as pending) {
+            <div class="flex flex-col gap-3 rounded-xs border border-tertiary/40 bg-tertiary/5 p-3">
+              <p class="text-on-surface text-xs">
+                Run <span class="font-jetbrains text-tertiary">{{ pending }}</span> on
+                <span class="font-jetbrains">{{ instance.name }}</span>, on
+                <span class="font-jetbrains">{{ name() }}</span>?
+                @if (pending === 'stop') {
+                  <span class="text-on-surface-variant">Its domains stop answering until it is started again.</span>
+                } @else if (pending === 'deploy') {
+                  <span class="text-on-surface-variant">This replaces what is running now.</span>
+                } @else if (pending === 'rollback') {
+                  <span class="text-on-surface-variant">
+                    This goes back to {{ instance.previousVersion ?? 'the previous version' }}.
+                  </span>
+                }
+              </p>
 
-    <!-- Deploy history -->
-    <app-deploy-history [entries]="deploys()" [loading]="deployHistory.isLoading()" />
+              <!-- Choosing a version is the whole reason `stack versions` runs on
+                   entering the page: without it, deploy goes to whatever is newest
+                   and the operator finds out afterwards. -->
+              @if (pending === 'deploy' && availableVersions().length > 0) {
+                <label class="flex flex-col gap-1">
+                  <span class="text-on-surface-variant text-[11px] uppercase tracking-wide">Version</span>
+                  <select
+                    [value]="chosenVersion() ?? ''"
+                    (change)="chosenVersion.set($any($event.target).value || null)"
+                    class="rounded-xs border border-outline-variant bg-surface-container-lowest px-2 py-1.5 font-jetbrains text-[11px] text-on-surface"
+                  >
+                    <option value="">
+                      Whatever stack would pick{{ versionInfo()?.chosen ? ' (' + versionInfo()!.chosen + ')' : '' }}
+                    </option>
+                    @for (v of availableVersions(); track v.tag) {
+                      <option [value]="v.tag">
+                        {{ v.tag }}{{ v.tag === versionInfo()?.running ? ' — running now' : '' }}{{ v.size ? ' · downloaded' : '' }}
+                      </option>
+                    }
+                  </select>
+                </label>
+              }
 
-    <!-- Domains -->
-    <div class="rounded-xs border border-outline-variant bg-surface-container-low p-4">
-      <span class="font-jetbrains text-on-surface-variant block text-xs uppercase">Domains</span>
-      <ul class="mt-2 flex flex-wrap gap-2">
-        @for (domain of instance.domains; track domain) {
-          <li>
-            <a
-              href="https://{{ domain }}"
-              target="_blank"
-              rel="noopener"
-              class="rounded-xs bg-primary/10 px-2 py-1 text-primary text-xs hover:underline"
-            >
-              {{ domain }}
-            </a>
-          </li>
-        }
-      </ul>
-    </div>
-
-    <!-- Volumes -->
-    <div class="rounded-xs border border-outline-variant bg-surface-container-low p-4">
-      <span class="font-jetbrains text-on-surface-variant block text-xs uppercase">Volumes</span>
-      @if (instance.volumes === null) {
-        <p class="mt-2 text-on-surface-variant text-xs">No backup has run for this instance yet.</p>
-      } @else if (instance.volumes.length === 0) {
-        <p class="mt-2 text-on-surface-variant text-xs">This instance declares no named volumes.</p>
-      } @else {
-        <ul class="mt-2 flex flex-col gap-1">
-          @for (volume of instance.volumes; track volume.name) {
-            <li class="flex items-center justify-between gap-4 font-jetbrains text-xs">
-              <span class="text-on-surface">{{ volume.name }}</span>
-              <span class="text-on-surface-variant">{{ volume.sizeBytes | bytes }}</span>
-            </li>
+              <div class="flex items-center gap-2">
+                <button
+                  type="button"
+                  (click)="cancel()"
+                  class="rounded-xs border border-outline-variant px-3 py-1.5 font-jetbrains text-[11px] uppercase text-on-surface hover:bg-surface-container-highest"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  (click)="run($any(pending))"
+                  class="rounded-xs bg-primary px-3 py-1.5 font-jetbrains text-[11px] uppercase text-on-primary"
+                >
+                  Yes, {{ pending }}
+                </button>
+              </div>
+            </div>
           }
-        </ul>
-        <p class="mt-2 text-on-surface-variant text-[11px]">
-          Sizes as of the last backup ({{ server()?.backup?.at | relativeTime }}), not live.
-        </p>
-      }
+
+          @if (runner.state() !== 'idle') {
+            <app-command-console
+              [title]="runner.command() ?? 'Output'"
+              [lines]="runner.lines()"
+              [state]="runner.state()"
+              [exitCode]="runner.exitCode()"
+              [error]="runner.error()"
+              (stop)="runner.stop()"
+              (clear)="runner.clear()"
+            />
+          }
+        </div>
+
+      </div>
+
+      <div class="flex flex-col gap-6">
+        <!-- Version. `running` comes from `stack versions`, read on entering the
+             page; the inventory cache only knows what it last read, which is stale
+             the moment anything is deployed outside the panel. -->
+        <div class="rounded-xs border border-outline-variant bg-surface-container-low p-4">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <span class="font-jetbrains text-on-surface-variant text-xs uppercase">Version</span>
+            @if (versions.isLoading()) {
+              <span class="text-on-surface-variant text-[11px]">checking…</span>
+            } @else if (versions.error()) {
+              <span class="text-tertiary text-[11px]">could not reach stack</span>
+            } @else if (deployWouldChange()) {
+              <span class="font-jetbrains text-[11px] text-tertiary">a newer version is published</span>
+            } @else if (versionInfo()) {
+              <span class="font-jetbrains text-[11px] text-secondary">up to date</span>
+            }
+          </div>
+
+          <div class="mt-2 grid grid-cols-2 gap-4">
+            <div>
+              <span class="text-on-surface-variant text-xs">Current</span>
+              <p class="font-jetbrains text-on-surface text-xs">
+                {{ versionInfo()?.running ?? instance.version ?? '—' }}
+              </p>
+              <p class="text-on-surface-variant text-xs">
+                deployed {{ instance.deployedAt | relativeTime }}
+              </p>
+            </div>
+            <div>
+              <span class="text-on-surface-variant text-xs">Previous</span>
+              <p class="font-jetbrains text-on-surface text-xs">{{ instance.previousVersion ?? '—' }}</p>
+              <p class="text-on-surface-variant text-xs">
+                deployed {{ instance.previousAt | relativeTime }}
+              </p>
+            </div>
+          </div>
+
+          @if (versionInfo(); as v) {
+            <div class="mt-3 flex flex-wrap gap-x-4 gap-y-1 border-t border-outline-variant pt-3 text-[11px]">
+              @if (v.branch) {
+                <span class="text-on-surface-variant">follows <span class="font-jetbrains">{{ v.branch }}</span></span>
+              }
+              @if (deployWouldChange()) {
+                <span class="text-on-surface-variant">
+                  deploy would use <span class="font-jetbrains text-tertiary">{{ v.chosen }}</span>
+                </span>
+              }
+              <span class="text-on-surface-variant">
+                {{ availableVersions().length }} version(s) published
+              </span>
+            </div>
+          }
+        </div>
+
+        <!-- Deploy history -->
+        <app-deploy-history [entries]="deploys()" [loading]="deployHistory.isLoading()" />
+
+        <!-- Domains -->
+        <div class="rounded-xs border border-outline-variant bg-surface-container-low p-4">
+          <span class="font-jetbrains text-on-surface-variant block text-xs uppercase">Domains</span>
+          <ul class="mt-2 flex flex-wrap gap-2">
+            @for (domain of instance.domains; track domain) {
+              <li>
+                <a
+                  href="https://{{ domain }}"
+                  target="_blank"
+                  rel="noopener"
+                  class="rounded-xs bg-primary/10 px-2 py-1 text-primary text-xs hover:underline"
+                >
+                  {{ domain }}
+                </a>
+              </li>
+            }
+          </ul>
+        </div>
+
+        <!-- Volumes -->
+        <div class="rounded-xs border border-outline-variant bg-surface-container-low p-4">
+          <span class="font-jetbrains text-on-surface-variant block text-xs uppercase">Volumes</span>
+          @if (instance.volumes === null) {
+            <p class="mt-2 text-on-surface-variant text-xs">No backup has run for this instance yet.</p>
+          } @else if (instance.volumes.length === 0) {
+            <p class="mt-2 text-on-surface-variant text-xs">This instance declares no named volumes.</p>
+          } @else {
+            <ul class="mt-2 flex flex-col gap-1">
+              @for (volume of instance.volumes; track volume.name) {
+                <li class="flex items-center justify-between gap-4 font-jetbrains text-xs">
+                  <span class="text-on-surface">{{ volume.name }}</span>
+                  <span class="text-on-surface-variant">{{ volume.sizeBytes | bytes }}</span>
+                </li>
+              }
+            </ul>
+            <p class="mt-2 text-on-surface-variant text-[11px]">
+              Sizes as of the last backup ({{ server()?.backup?.at | relativeTime }}), not live.
+            </p>
+          }
+        </div>
+
+      </div>
     </div>
 
     <p class="text-on-surface-variant text-xs">Read {{ instance.fetchedAt | relativeTime }}</p>

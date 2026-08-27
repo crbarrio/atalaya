@@ -456,7 +456,14 @@ case "$subcommand" in
     [[ $# -eq 0 ]] || valid_name "$1" || die "bad instance name"
     [[ $# -le 1 ]] || die "status takes at most one instance"
     ;;
-  versions|logs|rollback|start|stop)
+  versions)
+    [[ $# -ge 1 ]] || die "versions needs an instance"
+    valid_name "$1" || die "bad instance name"
+    # --json is the machine-readable contract atalaya reads; nothing else.
+    [[ $# -eq 1 || ($# -eq 2 && "$2" == "--json") ]] \
+      || die "versions takes an instance and optionally --json"
+    ;;
+  logs|rollback|start|stop)
     [[ $# -ge 1 ]] || die "$subcommand needs an instance"
     valid_name "$1" || die "bad instance name"
     [[ $# -eq 1 ]] || die "$subcommand takes no further arguments"

@@ -18,6 +18,12 @@ import { ActionsService } from './actions.service';
 export class ActionsController {
   constructor(private readonly actions: ActionsService) {}
 
+  @Get(':server/versions/:instance/list')
+  @ApiOperation({ summary: 'Which versions exist for an instance, and which one a deploy would pick.' })
+  versions(@Param('server') server: string, @Param('instance') instance: string) {
+    return this.actions.versions(server, instance);
+  }
+
   @Get(':server/:command')
   @ApiOperation({ summary: 'Run a short read-only stack command and return its output.' })
   async run(

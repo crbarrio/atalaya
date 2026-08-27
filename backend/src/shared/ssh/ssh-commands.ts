@@ -73,6 +73,8 @@ export interface CommandRequest {
   argument?: string;
   /** `deploy` only. */
   version?: string;
+  /** `versions` only: ask for the machine-readable form instead of the printed one. */
+  json?: boolean;
 }
 
 /**
@@ -120,6 +122,13 @@ export function buildCommand(request: CommandRequest, stackPath: string): string
       throw new Error(`Refusing to build a command for version '${request.version}'`);
     }
     argv.push('--version', request.version);
+  }
+
+  if (request.json) {
+    if (request.command !== 'versions') {
+      throw new Error(`'${request.command}' has no JSON form`);
+    }
+    argv.push('--json');
   }
 
   return argv;

@@ -25,3 +25,19 @@ export interface ConsoleLine {
 }
 
 export type RunState = 'idle' | 'running' | 'done' | 'failed';
+
+/** Mirrors the backend's `StackVersions` — `stack versions --json`. */
+export interface StackVersions {
+  instance: string;
+  running: string | null;
+  branch: string | null;
+  /** What a bare deploy would pick. Equal to `running` means it would change nothing. */
+  chosen: string | null;
+  services: { image: string; versions: StackVersion[] }[];
+}
+
+export interface StackVersion {
+  tag: string;
+  published: boolean;
+  size: string | null;
+}

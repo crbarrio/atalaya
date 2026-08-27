@@ -12,6 +12,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../shared/audit/audit.service';
 import { COMMANDS, CommandName, CommandRequest } from '../shared/ssh/ssh-commands';
 import { CommandEvent, SshService } from '../shared/ssh/ssh.service';
+import { StackVersions } from './interfaces/versions.interface';
 import { SshTarget } from '../shared/ssh/interfaces/ssh-target.interface';
 
 /**
@@ -62,6 +63,36 @@ export class ActionsService {
         });
       }
       throw new BadRequestException(this.explain(message));
+    }
+  }
+
+  /**
+   * Which versions exist for an instance, and which one a bare `deploy` would
+   * pick. Read-only, so no lock and no audit row.
+   *
+   * Parsed rather than shown: the printed form is prose with ANSI and unicode
+   * in it, which is exactly why `stack` grew a `--json` mode for this.
+   */
+  async versions(serverName: string, instance: string): Promise<StackVersions> {
+    const request: CommandRequest = { command: 'versions', argument: instance, json: true };
+    const { target } = await this.resolve(serverName, request);
+
+    let raw: string;
+    try {
+      raw = await this.ssh.run(target, request, COMMANDS.versions.timeoutMs ?? undefined);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new BadRequestException(this.explain(message));
+    }
+
+    try {
+      return JSON.parse(raw) as StackVersions;
+    } catch {
+      // An older `stack` without --json prints its usage and exits 0, which
+      // parses as nothing. Say which side is behind rather than "bad JSON".
+      throw new BadRequestException(
+        `'${serverName}' returned no version data — its \`stack\` may predate \`versions --json\`.`,
+      );
     }
   }
 
