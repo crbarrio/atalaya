@@ -298,8 +298,11 @@ Inserted ahead of Phase 3: `homeserver` itself was the one machine nothing watch
 gained a `kind` discriminator (`stack` | `host`) — a `host` server skips the SSH inventory
 entirely and takes its health from Prometheus, which is what makes a machine without `stack`
 representable at all. Its collectors are two more services in the same compose file, registered
-on boot rather than through the UI. Details, including why the disk rules were scoped to `/` in
-the process, in [monitoring.md](monitoring.md).
+on boot rather than through the UI. Details in [monitoring.md](monitoring.md).
+
+Adding it exposed an assumption that was already wrong: the panel showed one disk per server,
+hardcoded to `/`. Every mount is shown now, per-disk alert switches replace the special-casing,
+and a collector permission bug that had been hiding disks on every machine got fixed on the way.
 
 Also folded in here: **per-app volume sizes**, measured by `backup.sh` (the one place with docker
 access that already walks every volume) and read back through `stack inventory`. See

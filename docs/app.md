@@ -90,6 +90,20 @@ The monorepo itself: backend, frontend, and what is built so far.
       widths for both CDK dialogs (register-server, channel-form-dialog) and their form grids;
       and `flex-col`/`flex-wrap` fixes on a few rows (danger zone, notification channels, history
       chart peak stats) that overflowed at narrow widths. Verified with Playwright at 375×812.
+- [x] **A `host` server type — 2026-08-25**: `homeserver` runs no `stack`, so the screens that
+      assume instances and backups had to say so rather than show zeros and a red "NEVER". The
+      card drops the running/unknown/down counts, the "last read" line and the backup footer,
+      keeping the metrics half; the server page swaps the instance table for a list of the
+      machine's containers (docker's own names — `instanceOfContainer` expects stack's
+      `app-<instance>-<service>-N`) and hides the danger zone, since deregistering hands back a
+      cleanup script for a machine atalaya provisioned and this is not one. Design and the
+      backend half in [monitoring.md](monitoring.md).
+- [x] **Per-disk usage and alert switches — 2026-08-27**: one usage bar per mounted filesystem
+      instead of a single hardcoded `/`, fullest first, on both the card and the server page.
+      Each carries two checkboxes — `trend` and `capacity` — that switch off the corresponding
+      alert for that disk alone, for the disks that sit near-full or churn by design. Absent
+      preference means both on, so a new disk needs no setup. Backend and the reasoning in
+      [monitoring.md](monitoring.md).
 
 ## Layout, modelled on `compas`
 

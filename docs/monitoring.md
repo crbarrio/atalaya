@@ -235,14 +235,38 @@ permanently by design. If it stops, healthchecks.io reports it from outside — 
       Verified live: both targets `up=1`, health `ok`, all six rule groups healthy, the SSH
       inventory returning `ok` with no connection attempt, and the containers endpoint listing
       qBittorrent, Home Assistant, Syncthing, Plex and Pi-hole alongside atalaya's own seven.
-- [x] **Disk alerts scoped to `/` — 2026-08-25**: `DiskWillFillIn4Days` and `DiskAlmostFull`
-      filtered on `fstype` but not `mountpoint`, while the panel's `nodeDiskUsedPercent` has
-      always been fixed to `mountpoint="/"` — alerts and UI could disagree about the same server.
-      Adding homeserver made it concrete: its Prometheus disk sits at ~88% *by design* (70 GB
-      retention cap on a 79 G disk) and `DiskAlmostFull` fires at 90%, and its downloads disk
-      fills and empties on torrent activity — both would have alerted for reasons nobody would
-      act on. Secondary mounts are a different question with different thresholds; if `/boot` or
-      a data disk ever needs watching it gets its own rule, not a side effect of this one.
+- [x] ~~**Disk alerts scoped to `/` — 2026-08-25**~~: the rules filtered on `fstype` but not
+      `mountpoint`, while the panel was fixed to `mountpoint="/"`, so alerts and UI could disagree
+      about the same server. Scoping both to `/` aligned them and silenced homeserver's
+      near-full-by-design disks. **Superseded two days later** — it aligned them by making the
+      panel's blind spot official. See *Every disk, and switches for the ones that lie* below.
+- [x] **Every disk, and switches for the ones that lie — 2026-08-27**: the panel showed one disk
+      per server because `monitoring.queries.ts` hardcoded `mountpoint="/"`, commented *"every
+      server in the fleet has a single disk"*. Two separate faults sat behind that.
+      **node_exporter could not see them.** Running as `nobody`, it silently skips any filesystem
+      under a directory it cannot traverse — `statfs` fails and the mount is dropped with no
+      error anywhere. `/home/carlos` is `750`, so homeserver's 983 GB downloads disk did not
+      exist as far as Prometheus was concerned, while `/boot` and `/var/lib/prometheus` did,
+      which is what made it look like a query problem rather than a collector one. Now `user:
+      root`, everything it mounts read-only.
+      **And the queries only asked about `/`.** Dropping that revealed the assumption was already
+      false for the fleet: `marsella-test` and `madrid-prod` both have `/boot` and `/boot/efi`
+      that had never been visible. `ServerMetrics.disk` became `disks[]`, fullest first, one bar
+      per mount on the card and the server page, each with its own days-remaining.
+      The disk rules go back to covering every mountpoint. What replaces the `/` scoping is
+      **per-disk switches** — `trend` (`DiskWillFillIn4Days`) and `capacity` (`DiskAlmostFull`),
+      separately, because the two disks that need silencing need different ones: a downloads
+      volume churns and breaks `predict_linear`, a Prometheus data disk sits near 88% by its own
+      retention cap and trips the threshold. **Suppressed at the webhook, not in the rule file**:
+      alert configuration belongs in the database and the UI for the same reason routing does
+      (see *Where the configuration lives* in [PLAN.md](PLAN.md)), and excluding mountpoints in
+      YAML would bury the decision where nobody edits it. Prometheus still evaluates the rule; it
+      just does not become an incident. `DiskAlertPreference` holds a row only once something is
+      switched off, so a newly added disk alerts without anyone configuring it.
+      Found on the way: cAdvisor's built-in healthcheck defaults to port 8080, which on this
+      machine is Pi-hole — it answered 404 and the container reported `unhealthy` while scraping
+      perfectly. And `host` servers counted as backup failures on the Overview and Backups
+      screens, since a null backup status read as "never ran" rather than "not applicable".
 
 ## Backups are server-wide, not per-app — 2026-08-23
 
