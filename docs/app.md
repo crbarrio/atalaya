@@ -128,9 +128,11 @@ The monorepo itself: backend, frontend, and what is built so far.
       pick. Deploy gained a selector, so choosing a specific version no longer needs a terminal;
       the backend already accepted `--version` and nothing surfaced it. A `Versions` button still
       shows the printed form, which carries sizes and which images are downloaded — detail a
-      dropdown would lose. The page was capped at `max-w-2xl`, leaving one narrow column on the
-      left; it is now two above `lg` (what you do on the left, what you read on the right) and
-      one below, as before.
+      dropdown would lose. The page was also capped at `max-w-2xl`, leaving one narrow column on
+      the left. Two columns was the first attempt and was wrong: Actions is a row of buttons, so
+      it left a tall empty gap beside the information cards whenever nothing was running. The
+      toolbar and its console run full width instead — the console reads better wide anyway — and
+      the four information cards sit in a two-column grid below, where their heights balance.
 - [x] **Errored resources no longer blank a page — 2026-08-27**: reading `.value()` on a failed
       `httpResource` throws, and a throw during change detection takes the whole view with it.
       With Prometheus unreachable, one 500 from the deploy-history request stopped the entire
