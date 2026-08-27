@@ -120,6 +120,17 @@ The monorepo itself: backend, frontend, and what is built so far.
       itself was needed to stop `logs` leaking processes — see
       [stack-integration.md](stack-integration.md) — and it turns every newline into `\r\n`,
       which the redraw handling first read as "replace this line", rendering every line empty.
+- [x] **Real version data, and two columns — 2026-08-27**: the version card showed the inventory
+      cache — what was deployed as of the last read — which goes stale the moment anything is
+      deployed outside the panel, and said nothing about what is *available*. It now reads
+      `stack versions --json` on entering the page: what stack currently sees, whether a newer
+      version is published, which branch the server follows, and which tag a bare deploy would
+      pick. Deploy gained a selector, so choosing a specific version no longer needs a terminal;
+      the backend already accepted `--version` and nothing surfaced it. A `Versions` button still
+      shows the printed form, which carries sizes and which images are downloaded — detail a
+      dropdown would lose. The page was capped at `max-w-2xl`, leaving one narrow column on the
+      left; it is now two above `lg` (what you do on the left, what you read on the right) and
+      one below, as before.
 - [x] **Errored resources no longer blank a page — 2026-08-27**: reading `.value()` on a failed
       `httpResource` throws, and a throw during change detection takes the whole view with it.
       With Prometheus unreachable, one 500 from the deploy-history request stopped the entire
