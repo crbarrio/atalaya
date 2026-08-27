@@ -42,124 +42,124 @@
       }
     </div>
 
-    <!-- Two columns once there is room: what you do on the left, what you
-         read on the right. One column below lg, as before. -->
-    <div class="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] lg:items-start">
-      <div class="flex flex-col gap-6">
-        <!-- Actions -->
-        <div class="flex flex-col gap-3 rounded-xs border border-outline-variant bg-surface-container-low p-4">
-          <span class="font-jetbrains text-on-surface-variant block text-xs uppercase">Actions</span>
+    <!-- The toolbar and its console run full width: one is a row of buttons,
+         the other needs the room to be readable. Beside the information cards
+         they left a tall empty gap whenever no command was running. -->
+    <div class="flex flex-col gap-6">
+      <!-- Actions -->
+      <div class="flex flex-col gap-3 rounded-xs border border-outline-variant bg-surface-container-low p-4">
+        <span class="font-jetbrains text-on-surface-variant block text-xs uppercase">Actions</span>
 
-          <div class="flex flex-wrap gap-2">
-            @for (action of actions; track action.command) {
-              <button
-                type="button"
-                (click)="ask(action.command)"
-                [disabled]="runner.state() === 'running'"
-                [title]="action.hint"
-                class="rounded-xs border border-outline-variant px-3 py-1.5 font-jetbrains text-[11px] uppercase text-on-surface hover:bg-surface-container-highest disabled:opacity-40"
-              >
-                {{ action.label }}
-              </button>
-            }
+        <div class="flex flex-wrap gap-2">
+          @for (action of actions; track action.command) {
             <button
               type="button"
-              (click)="showVersions()"
+              (click)="ask(action.command)"
               [disabled]="runner.state() === 'running'"
-              title="Every published version, with sizes and which are downloaded here"
+              [title]="action.hint"
               class="rounded-xs border border-outline-variant px-3 py-1.5 font-jetbrains text-[11px] uppercase text-on-surface hover:bg-surface-container-highest disabled:opacity-40"
             >
-              Versions
+              {{ action.label }}
             </button>
-            <button
-              type="button"
-              (click)="showLogs()"
-              [disabled]="runner.state() === 'running'"
-              title="Follow this instance's container logs"
-              class="rounded-xs border border-outline-variant px-3 py-1.5 font-jetbrains text-[11px] uppercase text-on-surface hover:bg-surface-container-highest disabled:opacity-40"
-            >
-              Logs
-            </button>
-          </div>
-
-          <!-- Confirmation, inline rather than a dialog — same shape as the danger
-               zone on the server page. Naming the instance is the point: these
-               buttons all look alike and act on different things. -->
-          @if (confirming(); as pending) {
-            <div class="flex flex-col gap-3 rounded-xs border border-tertiary/40 bg-tertiary/5 p-3">
-              <p class="text-on-surface text-xs">
-                Run <span class="font-jetbrains text-tertiary">{{ pending }}</span> on
-                <span class="font-jetbrains">{{ instance.name }}</span>, on
-                <span class="font-jetbrains">{{ name() }}</span>?
-                @if (pending === 'stop') {
-                  <span class="text-on-surface-variant">Its domains stop answering until it is started again.</span>
-                } @else if (pending === 'deploy') {
-                  <span class="text-on-surface-variant">This replaces what is running now.</span>
-                } @else if (pending === 'rollback') {
-                  <span class="text-on-surface-variant">
-                    This goes back to {{ instance.previousVersion ?? 'the previous version' }}.
-                  </span>
-                }
-              </p>
-
-              <!-- Choosing a version is the whole reason `stack versions` runs on
-                   entering the page: without it, deploy goes to whatever is newest
-                   and the operator finds out afterwards. -->
-              @if (pending === 'deploy' && availableVersions().length > 0) {
-                <label class="flex flex-col gap-1">
-                  <span class="text-on-surface-variant text-[11px] uppercase tracking-wide">Version</span>
-                  <select
-                    [value]="chosenVersion() ?? ''"
-                    (change)="chosenVersion.set($any($event.target).value || null)"
-                    class="rounded-xs border border-outline-variant bg-surface-container-lowest px-2 py-1.5 font-jetbrains text-[11px] text-on-surface"
-                  >
-                    <option value="">
-                      Whatever stack would pick{{ versionInfo()?.chosen ? ' (' + versionInfo()!.chosen + ')' : '' }}
-                    </option>
-                    @for (v of availableVersions(); track v.tag) {
-                      <option [value]="v.tag">
-                        {{ v.tag }}{{ v.tag === versionInfo()?.running ? ' — running now' : '' }}{{ v.size ? ' · downloaded' : '' }}
-                      </option>
-                    }
-                  </select>
-                </label>
-              }
-
-              <div class="flex items-center gap-2">
-                <button
-                  type="button"
-                  (click)="cancel()"
-                  class="rounded-xs border border-outline-variant px-3 py-1.5 font-jetbrains text-[11px] uppercase text-on-surface hover:bg-surface-container-highest"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  (click)="run($any(pending))"
-                  class="rounded-xs bg-primary px-3 py-1.5 font-jetbrains text-[11px] uppercase text-on-primary"
-                >
-                  Yes, {{ pending }}
-                </button>
-              </div>
-            </div>
           }
-
-          @if (runner.state() !== 'idle') {
-            <app-command-console
-              [title]="runner.command() ?? 'Output'"
-              [lines]="runner.lines()"
-              [state]="runner.state()"
-              [exitCode]="runner.exitCode()"
-              [error]="runner.error()"
-              (stop)="runner.stop()"
-              (clear)="runner.clear()"
-            />
-          }
+          <button
+            type="button"
+            (click)="showVersions()"
+            [disabled]="runner.state() === 'running'"
+            title="Every published version, with sizes and which are downloaded here"
+            class="rounded-xs border border-outline-variant px-3 py-1.5 font-jetbrains text-[11px] uppercase text-on-surface hover:bg-surface-container-highest disabled:opacity-40"
+          >
+            Versions
+          </button>
+          <button
+            type="button"
+            (click)="showLogs()"
+            [disabled]="runner.state() === 'running'"
+            title="Follow this instance's container logs"
+            class="rounded-xs border border-outline-variant px-3 py-1.5 font-jetbrains text-[11px] uppercase text-on-surface hover:bg-surface-container-highest disabled:opacity-40"
+          >
+            Logs
+          </button>
         </div>
 
+        <!-- Confirmation, inline rather than a dialog — same shape as the danger
+             zone on the server page. Naming the instance is the point: these
+             buttons all look alike and act on different things. -->
+        @if (confirming(); as pending) {
+          <div class="flex flex-col gap-3 rounded-xs border border-tertiary/40 bg-tertiary/5 p-3">
+            <p class="text-on-surface text-xs">
+              Run <span class="font-jetbrains text-tertiary">{{ pending }}</span> on
+              <span class="font-jetbrains">{{ instance.name }}</span>, on
+              <span class="font-jetbrains">{{ name() }}</span>?
+              @if (pending === 'stop') {
+                <span class="text-on-surface-variant">Its domains stop answering until it is started again.</span>
+              } @else if (pending === 'deploy') {
+                <span class="text-on-surface-variant">This replaces what is running now.</span>
+              } @else if (pending === 'rollback') {
+                <span class="text-on-surface-variant">
+                  This goes back to {{ instance.previousVersion ?? 'the previous version' }}.
+                </span>
+              }
+            </p>
+
+            <!-- Choosing a version is the whole reason `stack versions` runs on
+                 entering the page: without it, deploy goes to whatever is newest
+                 and the operator finds out afterwards. -->
+            @if (pending === 'deploy' && availableVersions().length > 0) {
+              <label class="flex flex-col gap-1">
+                <span class="text-on-surface-variant text-[11px] uppercase tracking-wide">Version</span>
+                <select
+                  [value]="chosenVersion() ?? ''"
+                  (change)="chosenVersion.set($any($event.target).value || null)"
+                  class="rounded-xs border border-outline-variant bg-surface-container-lowest px-2 py-1.5 font-jetbrains text-[11px] text-on-surface"
+                >
+                  <option value="">
+                    Whatever stack would pick{{ versionInfo()?.chosen ? ' (' + versionInfo()!.chosen + ')' : '' }}
+                  </option>
+                  @for (v of availableVersions(); track v.tag) {
+                    <option [value]="v.tag">
+                      {{ v.tag }}{{ v.tag === versionInfo()?.running ? ' — running now' : '' }}{{ v.size ? ' · downloaded' : '' }}
+                    </option>
+                  }
+                </select>
+              </label>
+            }
+
+            <div class="flex items-center gap-2">
+              <button
+                type="button"
+                (click)="cancel()"
+                class="rounded-xs border border-outline-variant px-3 py-1.5 font-jetbrains text-[11px] uppercase text-on-surface hover:bg-surface-container-highest"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                (click)="run($any(pending))"
+                class="rounded-xs bg-primary px-3 py-1.5 font-jetbrains text-[11px] uppercase text-on-primary"
+              >
+                Yes, {{ pending }}
+              </button>
+            </div>
+          </div>
+        }
+
+        @if (runner.state() !== 'idle') {
+          <app-command-console
+            [title]="runner.command() ?? 'Output'"
+            [lines]="runner.lines()"
+            [state]="runner.state()"
+            [exitCode]="runner.exitCode()"
+            [error]="runner.error()"
+            (stop)="runner.stop()"
+            (clear)="runner.clear()"
+          />
+        }
       </div>
 
-      <div class="flex flex-col gap-6">
+      <!-- The reading half, in a grid: four cards of similar size balance far
+           better than one column stacked beside a short toolbar. -->
+      <div class="grid grid-cols-1 items-start gap-6 lg:grid-cols-2">
         <!-- Version. `running` comes from `stack versions`, read on entering the
              page; the inventory cache only knows what it last read, which is stale
              the moment anything is deployed outside the panel. -->
