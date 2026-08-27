@@ -2,6 +2,8 @@ import { Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { ScheduleModule } from '@nestjs/schedule';
 
+import { AuditModule } from './shared/audit/audit.module';
+import { ActionsModule } from './actions/actions.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { ChannelsModule } from './channels/channels.module';
@@ -31,6 +33,8 @@ import { WebhooksModule } from './webhooks/webhooks.module';
     SettingsModule,
     ChannelsModule,
     SearchModule,
+    ActionsModule,
+    AuditModule,
   ],
   controllers: [AppController],
   providers: [

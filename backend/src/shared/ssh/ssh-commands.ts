@@ -5,28 +5,130 @@
  * command, and no function anywhere accepts a command string. Gaining a new
  * capability means adding an entry here, which is deliberate and shows up in
  * review.
+ *
+ * The same list exists again on each server, in the root-owned dispatcher
+ * `infra/fleet/server-setup/setup-server.sh` installs. That duplication is the
+ * point: this side is convenience and good errors, that side is the security
+ * boundary. A bug here cannot widen what a server will accept.
  */
 
 /** Absolute POSIX path with no shell metacharacters. */
 const SAFE_PATH = /^\/[A-Za-z0-9._\-/]*$/;
 
-const COMMANDS = {
-  /** Every instance and the last backup status, as JSON. */
-  inventory: (stackPath: string) => `${stackPath} inventory`,
-} as const;
+/** Instance names, and image tags, as `stack` writes them. */
+const SAFE_NAME = /^[a-z0-9][a-z0-9._-]*$/;
 
-export type CommandName = keyof typeof COMMANDS;
+/** Where setup-server.sh installs the dispatcher. Fixed, never from the database. */
+const DISPATCHER = '/usr/local/sbin/atalaya-stack';
+
+export type CommandName =
+  | 'inventory'
+  | 'status'
+  | 'versions'
+  | 'logs'
+  | 'deploy'
+  | 'rollback'
+  | 'start'
+  | 'stop'
+  | 'backup';
+
+export interface CommandSpec {
+  /**
+   * `read` never changes anything and needs no confirmation. `mutate` does,
+   * and is serialised per instance. `inventory` is `read` and also the one
+   * command that does not go through the dispatcher.
+   */
+  kind: 'read' | 'mutate';
+  /** Whether output is streamed to the browser or collected and returned once. */
+  streams: boolean;
+  /** Wall-clock limit. `null` means none: `logs` follows until the viewer leaves. */
+  timeoutMs: number | null;
+  /** Whether the command names an instance. `backup` takes a mode instead. */
+  needsInstance: boolean;
+}
+
+export const COMMANDS: Record<CommandName, CommandSpec> = {
+  // Runs unprivileged, directly, exactly as it always has. The whole panel
+  // depends on it, so it must keep working on a server whose dispatcher has
+  // not been installed yet.
+  inventory: { kind: 'read', streams: false, timeoutMs: 20_000, needsInstance: false },
+
+  status: { kind: 'read', streams: false, timeoutMs: 30_000, needsInstance: false },
+  versions: { kind: 'read', streams: false, timeoutMs: 60_000, needsInstance: true },
+  // No limit: `stack logs` is `docker compose logs -f`, which never returns.
+  // It ends when the viewer disconnects.
+  logs: { kind: 'read', streams: true, timeoutMs: null, needsInstance: true },
+
+  deploy: { kind: 'mutate', streams: true, timeoutMs: 15 * 60_000, needsInstance: true },
+  rollback: { kind: 'mutate', streams: true, timeoutMs: 15 * 60_000, needsInstance: true },
+  start: { kind: 'mutate', streams: true, timeoutMs: 15 * 60_000, needsInstance: true },
+  stop: { kind: 'mutate', streams: true, timeoutMs: 5 * 60_000, needsInstance: true },
+  // Streams whole volumes to remote storage; on a large instance this is hours.
+  backup: { kind: 'mutate', streams: true, timeoutMs: 4 * 60 * 60_000, needsInstance: false },
+};
+
+export interface CommandRequest {
+  command: CommandName;
+  /** Instance name, or the mode for `backup`. */
+  argument?: string;
+  /** `deploy` only. */
+  version?: string;
+}
 
 /**
- * Builds the command line for a name.
+ * Builds the argv for a request.
  *
- * `stackPath` is the only value interpolated, and it is checked here rather
- * than trusted: it reaches this point from the database, and a row is not a
- * safer source than a form.
+ * Returns an array, never a string, so nothing downstream has to quote or
+ * escape — `ssh2`'s exec takes one line, and that line is assembled here from
+ * values every one of which has been matched against a regex first.
+ *
+ * `stackPath` is checked rather than trusted: it reaches this point from the
+ * database, and a row is not a safer source than a form.
  */
-export function buildCommand(command: CommandName, stackPath: string): string {
+export function buildCommand(request: CommandRequest, stackPath: string): string[] {
+  const spec = COMMANDS[request.command];
+  if (!spec) throw new Error(`Unknown command '${request.command}'`);
+
   if (!SAFE_PATH.test(stackPath)) {
     throw new Error(`Refusing to build a command with stackPath '${stackPath}'`);
   }
-  return COMMANDS[command](stackPath);
+
+  if (request.command === 'inventory') return [stackPath, 'inventory'];
+
+  const argv = ['sudo', '-n', '-u', OWNER, DISPATCHER, request.command];
+
+  if (request.command === 'backup') {
+    if (request.argument !== 'full' && request.argument !== 'incremental') {
+      throw new Error("backup takes 'full' or 'incremental'");
+    }
+    return [...argv, request.argument];
+  }
+
+  if (spec.needsInstance || request.argument !== undefined) {
+    const instance = request.argument ?? '';
+    if (!SAFE_NAME.test(instance)) {
+      throw new Error(`Refusing to build a command for instance '${instance}'`);
+    }
+    argv.push(instance);
+  }
+
+  if (request.version !== undefined) {
+    if (request.command !== 'deploy') {
+      throw new Error(`'${request.command}' takes no version`);
+    }
+    if (!SAFE_NAME.test(request.version)) {
+      throw new Error(`Refusing to build a command for version '${request.version}'`);
+    }
+    argv.push('--version', request.version);
+  }
+
+  return argv;
 }
+
+/**
+ * The account the dispatcher runs `stack` as — the one that owns stack's
+ * directory and is in the docker group. Fixed rather than configurable: it
+ * has to match the sudo rule setup-server.sh wrote, and a mismatch should be
+ * a failed command, not a silently different privilege.
+ */
+const OWNER = 'ubuntu';

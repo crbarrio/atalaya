@@ -20,7 +20,7 @@ export class InventoryReader {
         keyPath: server.sshKeyPath,
         stackPath: server.stackPath,
       },
-      'inventory',
+      { command: 'inventory' },
     );
     return parseStackInventory(raw);
   }

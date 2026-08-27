@@ -374,9 +374,16 @@ setup_atalaya_user() {
 
   # from= ties the key to the addresses given, so a copy taken anywhere else is
   # useless. OpenSSH accepts a comma-separated list, which is how a development
-  # workstation gets in without a second identity. restrict turns off port
-  # forwarding, agent forwarding and a pty: reading over exec needs none of them.
-  local line="from=\"${ATALAYA_FROM}\",restrict ${ATALAYA_KEY}"
+  # workstation gets in without a second identity. restrict turns everything
+  # off — port forwarding, agent forwarding, X11 — and pty puts back the one
+  # piece that is needed:
+  #
+  # `stack logs` is `docker compose logs -f`, which never exits. Without a
+  # terminal, closing the SSH channel does not signal the remote process group,
+  # so every viewer who walked away left a follower running forever. With a pty
+  # the hangup propagates and the command dies with the connection. Verified by
+  # counting `docker compose logs` processes before and after.
+  local line="from=\"${ATALAYA_FROM}\",restrict,pty ${ATALAYA_KEY}"
   if write_if_changed "$home/.ssh/authorized_keys" "$line" 0600; then
     changed "authorized_keys written, restricted to ${ATALAYA_FROM}"
   else
