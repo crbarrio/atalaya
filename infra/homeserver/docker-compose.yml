@@ -132,6 +132,10 @@ services:
     restart: unless-stopped
     network_mode: host
     privileged: true
+    # The image's healthcheck defaults to port 8080, which here is Pi-hole —
+    # it answered 404 and the container reported unhealthy while scraping fine.
+    environment:
+      - CADVISOR_HEALTHCHECK_URL=http://127.0.0.1:8081/healthz
     devices:
       - /dev/kmsg
     volumes:
