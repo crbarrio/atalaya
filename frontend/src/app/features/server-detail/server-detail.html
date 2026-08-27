@@ -190,11 +190,11 @@
         </button>
       }
     </div>
-    <app-history-chart [history]="history.value()" [hours]="historyHours()" [loading]="history.isLoading()" />
+    <app-history-chart [history]="historyValue()" [hours]="historyHours()" [loading]="history.isLoading()" />
 
     @if (isHost()) {
       <app-host-containers
-        [containers]="hostContainers.value()"
+        [containers]="containersValue()"
         [loading]="hostContainers.isLoading()"
       />
     } @else {
@@ -312,6 +312,82 @@
             </div>
           }
         </div>
+      }
+    </div>
+
+    <div class="flex flex-col gap-3 rounded-xs border border-outline-variant bg-surface-container-low p-4">
+      <span class="font-jetbrains text-on-surface-variant block text-xs uppercase">Actions</span>
+
+      <div class="flex flex-wrap gap-2">
+        <button
+          type="button"
+          (click)="runStatus()"
+          [disabled]="runner.state() === 'running'"
+          title="What stack reports for every instance on this machine"
+          class="rounded-xs border border-outline-variant px-3 py-1.5 font-jetbrains text-[11px] uppercase text-on-surface hover:bg-surface-container-highest disabled:opacity-40"
+        >
+          Status
+        </button>
+        <button
+          type="button"
+          (click)="askBackup('incremental')"
+          [disabled]="runner.state() === 'running'"
+          title="Only what changed since the last backup"
+          class="rounded-xs border border-outline-variant px-3 py-1.5 font-jetbrains text-[11px] uppercase text-on-surface hover:bg-surface-container-highest disabled:opacity-40"
+        >
+          Backup · incremental
+        </button>
+        <button
+          type="button"
+          (click)="askBackup('full')"
+          [disabled]="runner.state() === 'running'"
+          title="Whole volumes, rebuilding the chain — slow"
+          class="rounded-xs border border-outline-variant px-3 py-1.5 font-jetbrains text-[11px] uppercase text-on-surface hover:bg-surface-container-highest disabled:opacity-40"
+        >
+          Backup · full
+        </button>
+      </div>
+
+      @if (confirmingBackup(); as mode) {
+        <div class="flex flex-col gap-3 rounded-xs border border-tertiary/40 bg-tertiary/5 p-3">
+          <p class="text-on-surface text-xs">
+            Run a <span class="font-jetbrains text-tertiary">{{ mode }}</span> backup of every
+            instance on <span class="font-jetbrains">{{ server.name }}</span>?
+            @if (mode === 'full') {
+              <span class="text-on-surface-variant">
+                A full run repacks every volume and can take hours on a large server.
+              </span>
+            }
+          </p>
+          <div class="flex items-center gap-2">
+            <button
+              type="button"
+              (click)="confirmingBackup.set(null)"
+              class="rounded-xs border border-outline-variant px-3 py-1.5 font-jetbrains text-[11px] uppercase text-on-surface hover:bg-surface-container-highest"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              (click)="runBackup(mode)"
+              class="rounded-xs bg-primary px-3 py-1.5 font-jetbrains text-[11px] uppercase text-on-primary"
+            >
+              Yes, back up
+            </button>
+          </div>
+        </div>
+      }
+
+      @if (runner.state() !== 'idle') {
+        <app-command-console
+          [title]="runner.command() ?? 'Output'"
+          [lines]="runner.lines()"
+          [state]="runner.state()"
+          [exitCode]="runner.exitCode()"
+          [error]="runner.error()"
+          (stop)="runner.stop()"
+          (clear)="runner.clear()"
+        />
       }
     </div>
 

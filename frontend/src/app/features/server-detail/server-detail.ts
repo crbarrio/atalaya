@@ -11,6 +11,9 @@ import { usagePercent } from '../../shared/usage-percent';
 import { BytesPipe } from '../../shared/pipes/bytes.pipe';
 import { CpuCoresPipe } from '../../shared/pipes/cpu-cores.pipe';
 import { RelativeTimePipe } from '../../shared/pipes/relative-time.pipe';
+import { commandRunner } from '../../shared/command-runner';
+import { valueOr } from '../../shared/resource-value';
+import { CommandConsole } from '../../shared/ui/command-console/command-console';
 import { HistoryChart } from '../../shared/ui/history-chart/history-chart';
 import { HostContainers } from '../../shared/ui/host-containers/host-containers';
 import { MetaChip } from '../../shared/ui/meta-chip/meta-chip';
@@ -30,6 +33,7 @@ import { UsageBar } from '../../shared/ui/usage-bar/usage-bar';
     UsageBar,
     HistoryChart,
     HostContainers,
+    CommandConsole,
   ],
   templateUrl: './server-detail.html',
 })
@@ -54,6 +58,9 @@ export class ServerDetailPage {
   protected readonly isHost = computed(() => this.server()?.kind === 'host');
   protected readonly hostContainers = this.metricsService.hostContainers(this.name);
 
+  protected readonly historyValue = computed(() => valueOr(this.history, undefined));
+  protected readonly containersValue = computed(() => valueOr(this.hostContainers, []));
+
   protected readonly historyHours = signal(24);
   protected readonly historyRanges = [
     { label: '24h', hours: 24 },
@@ -73,7 +80,7 @@ export class ServerDetailPage {
    * both on — that is what makes a newly added disk alert without setup.
    */
   protected readonly disks = computed(() => {
-    const preferences = new Map(this.diskPreferences.value().map((p) => [p.mountpoint, p]));
+    const preferences = new Map(valueOr(this.diskPreferences, []).map((p) => [p.mountpoint, p]));
     return (this.metrics.value()?.server.disks ?? []).map((disk) => ({
       ...disk,
       percent: usagePercent(disk),
@@ -143,6 +150,26 @@ export class ServerDetailPage {
 
   protected engineIcon(service: string): string {
     return ENGINE_ICONS[service] ?? 'settings_ethernet';
+  }
+
+  // ── Actions ───────────────────────────────────────────────────────────────
+
+  protected readonly runner = commandRunner();
+  /** `full` or `incremental` awaiting confirmation, or null. */
+  protected readonly confirmingBackup = signal<'full' | 'incremental' | null>(null);
+
+  protected askBackup(mode: 'full' | 'incremental'): void {
+    this.confirmingBackup.set(mode);
+  }
+
+  protected runBackup(mode: 'full' | 'incremental'): void {
+    this.confirmingBackup.set(null);
+    this.runner.start(this.name(), 'backup', { instance: mode });
+  }
+
+  protected runStatus(): void {
+    this.confirmingBackup.set(null);
+    this.runner.start(this.name(), 'status', {});
   }
 
   protected readonly confirmingDeregister = signal(false);

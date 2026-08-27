@@ -1,13 +1,20 @@
-import { Component, computed, inject, input, signal } from '@angular/core';
+import { Component, DestroyRef, computed, inject, input, signal } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
 
+import { ActionCommand } from '../../core/models/action.model';
 import { MetricsService } from '../../core/services/metrics.service';
 import { ServersService } from '../../core/services/servers.service';
 import { BytesPipe } from '../../shared/pipes/bytes.pipe';
 import { RelativeTimePipe } from '../../shared/pipes/relative-time.pipe';
+import { commandRunner } from '../../shared/command-runner';
+import { valueOr } from '../../shared/resource-value';
+import { CommandConsole } from '../../shared/ui/command-console/command-console';
 import { DeployHistory } from '../../shared/ui/deploy-history/deploy-history';
 import { MetaChip } from '../../shared/ui/meta-chip/meta-chip';
 import { StateBadge } from '../../shared/ui/state-badge/state-badge';
+
+/** Actions that change the instance, and therefore need confirming first. */
+const DESTRUCTIVE = new Set(['deploy', 'rollback', 'stop', 'start']);
 
 /**
  * There is no `GET /api/servers/:name/:instance` endpoint — `stack inventory`
@@ -17,7 +24,15 @@ import { StateBadge } from '../../shared/ui/state-badge/state-badge';
  */
 @Component({
   selector: 'app-instance-detail',
-  imports: [RouterLink, RelativeTimePipe, BytesPipe, StateBadge, MetaChip, DeployHistory],
+  imports: [
+    RouterLink,
+    RelativeTimePipe,
+    BytesPipe,
+    StateBadge,
+    MetaChip,
+    DeployHistory,
+    CommandConsole,
+  ],
   templateUrl: './instance-detail.html',
 })
 export class InstanceDetailPage {
@@ -28,6 +43,7 @@ export class InstanceDetailPage {
   private readonly serversService = inject(ServersService);
   private readonly metricsService = inject(MetricsService);
   private readonly router = inject(Router);
+  private readonly destroyRef = inject(DestroyRef);
 
   protected readonly detail = this.serversService.serverDetail(this.name);
 
@@ -44,6 +60,9 @@ export class InstanceDetailPage {
     this.deployHistoryDays,
   );
 
+  /** Empty rather than fatal when Prometheus is unreachable — see valueOr. */
+  protected readonly deploys = computed(() => valueOr(this.deployHistory, []));
+
   /** 404 on the server itself vs. its instance simply not existing on it. */
   protected readonly serverNotFound = computed(() => {
     const error = this.detail.error() as { status?: number } | undefined;
@@ -53,5 +72,57 @@ export class InstanceDetailPage {
   /** Always the parent server, not browser history — a bookmarked/refreshed instance URL has no in-app history to go back to. */
   protected goBack(): void {
     this.router.navigate(['/servers', this.name()]);
+  }
+
+  // ── Actions ───────────────────────────────────────────────────────────────
+
+  protected readonly runner = commandRunner();
+
+  /**
+   * Which action is waiting to be confirmed, by name. Same shape as the keyed
+   * confirmation in notification-channels: one signal, no dialog, and pressing
+   * a second action while one is pending simply moves the prompt.
+   */
+  protected readonly confirming = signal<string | null>(null);
+
+  protected readonly actions: { command: ActionCommand; label: string; hint: string }[] = [
+    { command: 'deploy', label: 'Deploy', hint: 'Deploy the newest published version' },
+    { command: 'rollback', label: 'Rollback', hint: 'Go back to the previous version' },
+    { command: 'stop', label: 'Stop', hint: 'Containers and routing down; data is kept' },
+    { command: 'start', label: 'Start', hint: 'Bring back the version that was running' },
+  ];
+
+  protected ask(command: string): void {
+    this.confirming.set(command);
+  }
+
+  protected cancel(): void {
+    this.confirming.set(null);
+  }
+
+  protected run(command: ActionCommand): void {
+    this.confirming.set(null);
+    this.runner.start(this.name(), command, { instance: this.instance() });
+    // The inventory cache still shows the old version until it is re-read.
+    if (DESTRUCTIVE.has(command)) this.refreshAfter();
+  }
+
+  protected showLogs(): void {
+    this.confirming.set(null);
+    this.runner.start(this.name(), 'logs', { instance: this.instance() });
+  }
+
+  /**
+   * Re-reads the server once the command has finished, so the version and
+   * state on this page stop showing what was true before it ran.
+   */
+  private refreshAfter(): void {
+    const check = setInterval(() => {
+      if (this.runner.state() === 'running') return;
+      clearInterval(check);
+      this.detail.reload();
+      this.deployHistory.reload();
+    }, 1000);
+    this.destroyRef.onDestroy(() => clearInterval(check));
   }
 }
