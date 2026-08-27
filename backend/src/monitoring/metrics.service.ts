@@ -4,11 +4,12 @@ import {
   ActiveAlert,
   BackupDuration,
   DeployHistoryEntry,
+  DiskUsage,
   HostContainer,
   ServerHistory,
   ServerMetrics,
 } from './interfaces/server-metrics.interface';
-import { ContainerUsage, MetricsReader } from './metrics.reader';
+import { ContainerUsage, MetricsReader, RawServerMetrics } from './metrics.reader';
 
 interface MetricsTarget {
   tailnetIp: string;
@@ -32,12 +33,7 @@ export class MetricsService {
         totalBytes: raw.memoryTotalBytes,
         daysRemaining: daysRemaining(raw.memoryAvailableBytes, raw.memoryAvailDeriv),
       },
-      disk: {
-        usedBytes: usedBytes(raw.diskTotalBytes, raw.diskAvailableBytes),
-        totalBytes: raw.diskTotalBytes,
-        mountpoint: '/',
-        daysRemaining: daysRemaining(raw.diskAvailableBytes, raw.diskAvailDeriv),
-      },
+      disks: disks(raw),
       scrape: { node: upToBoolean(raw.nodeUp), cadvisor: upToBoolean(raw.cadvisorUp) },
       uptime: { seconds: uptimeSeconds(raw.bootTimeSeconds) },
       load: { load1: raw.load1, load5: raw.load5, cpuCount: raw.cpuCount },
@@ -67,6 +63,30 @@ export class MetricsService {
   deployHistory(target: MetricsTarget, app: string, days: number): Promise<DeployHistoryEntry[]> {
     return this.reader.deployHistory(`${target.tailnetIp}:${target.nodePort}`, app, days);
   }
+}
+
+/**
+ * One entry per mounted filesystem, fullest first — a server with four disks
+ * cares about the one about to fill, not about `/` in particular. Driven by
+ * the size series: a disk with no total is not a disk we can say anything
+ * about.
+ */
+function disks(raw: RawServerMetrics): DiskUsage[] {
+  return [...raw.diskTotalBytes]
+    .map(([mountpoint, totalBytes]) => {
+      const availableBytes = raw.diskAvailableBytes.get(mountpoint) ?? null;
+      return {
+        mountpoint,
+        totalBytes,
+        usedBytes: usedBytes(totalBytes, availableBytes),
+        daysRemaining: daysRemaining(availableBytes, raw.diskAvailDeriv.get(mountpoint) ?? null),
+      };
+    })
+    .sort((a, b) => percentUsed(b) - percentUsed(a));
+}
+
+function percentUsed(disk: DiskUsage): number {
+  return disk.usedBytes !== null && disk.totalBytes ? disk.usedBytes / disk.totalBytes : 0;
 }
 
 function usedBytes(total: number | null, available: number | null): number | null {

@@ -114,6 +114,10 @@ services:
     restart: unless-stopped
     network_mode: host
     pid: host
+    # Filesystems under a directory the default `nobody` cannot traverse (a
+    # 750 home, say) are skipped silently — statfs on the mountpoint fails.
+    # Everything it mounts is read-only.
+    user: root
     volumes:
       # rslave so mounts appearing after this container starts are still seen.
       - /:/host:ro,rslave

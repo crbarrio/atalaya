@@ -7,6 +7,12 @@ import { AlertmanagerAlert, AlertmanagerWebhookPayload } from './interfaces/aler
 
 const PING_TIMEOUT_MS = 10_000;
 
+/** Disk alerts that can be switched off per mountpoint, and the flag that does it. */
+const MUTABLE_DISK_ALERTS: Record<string, 'trendAlerts' | 'capacityAlerts' | undefined> = {
+  DiskWillFillIn4Days: 'trendAlerts',
+  DiskAlmostFull: 'capacityAlerts',
+};
+
 /**
  * `Watchdog` is a heartbeat, not something to show in an inbox: it is pulled
  * out and pinged to healthchecks.io instead of becoming an Incident row. See
@@ -26,10 +32,32 @@ export class WebhooksService {
     for (const alert of payload.alerts) {
       if (alert.labels.alertname === 'Watchdog') {
         await this.pingWatchdog();
+      } else if (await this.isMuted(alert)) {
+        this.logger.debug(
+          `Muted ${alert.labels.alertname} for ${alert.labels.server}:${alert.labels.mountpoint}`,
+        );
       } else {
         await this.upsertIncident(alert);
       }
     }
+  }
+
+  /**
+   * Disk alerts the operator has switched off for one mountpoint. Suppressed
+   * here rather than in the rule file because the premise is that this is
+   * configurable from the UI, and Prometheus rules are files — the same reason
+   * alert routing lives in the database. Prometheus still evaluates the rule;
+   * it just does not become an incident or a notification.
+   */
+  private async isMuted(alert: AlertmanagerAlert): Promise<boolean> {
+    const field = MUTABLE_DISK_ALERTS[alert.labels.alertname ?? ''];
+    const { server, mountpoint } = alert.labels;
+    if (!field || !server || !mountpoint) return false;
+
+    const preference = await this.prisma.diskAlertPreference.findFirst({
+      where: { mountpoint, server: { name: server } },
+    });
+    return preference ? !preference[field] : false;
   }
 
   private async pingWatchdog(): Promise<void> {

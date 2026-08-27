@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 
 import { PrismaModule } from '../prisma/prisma.module';
 import { PrometheusModule } from '../shared/prometheus/prometheus.module';
+import { DiskPreferencesService } from './disk-preferences.service';
 import { MetricsReader } from './metrics.reader';
 import { MetricsService } from './metrics.service';
 import { MonitoringController } from './monitoring.controller';
@@ -11,7 +12,7 @@ import { MonitoringService } from './monitoring.service';
 @Module({
   imports: [PrismaModule, PrometheusModule],
   controllers: [MonitoringController],
-  providers: [MonitoringReader, MonitoringService, MetricsReader, MetricsService],
+  providers: [MonitoringReader, MonitoringService, MetricsReader, MetricsService, DiskPreferencesService],
   exports: [MonitoringService, MetricsService],
 })
 export class MonitoringModule {}

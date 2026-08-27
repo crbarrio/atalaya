@@ -1,7 +1,17 @@
-import { Controller, Get, NotFoundException, Param, Query } from '@nestjs/common';
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Get,
+  NotFoundException,
+  Param,
+  Put,
+  Query,
+} from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 
 import { PrismaService } from '../prisma/prisma.service';
+import { DiskPreferencesService } from './disk-preferences.service';
 import { MetricsService } from './metrics.service';
 import { MonitoringService } from './monitoring.service';
 
@@ -12,6 +22,7 @@ export class MonitoringController {
     private readonly prisma: PrismaService,
     private readonly monitoring: MonitoringService,
     private readonly metricsService: MetricsService,
+    private readonly diskPrefs: DiskPreferencesService,
   ) {}
 
   @Get(':name')
@@ -53,6 +64,23 @@ export class MonitoringController {
       backup,
       alerts,
     };
+  }
+
+  @Get(':name/disks/preferences')
+  @ApiOperation({ summary: 'Which disk alerts are switched off, per mountpoint.' })
+  listDiskPreferences(@Param('name') name: string) {
+    return this.diskPrefs.list(name);
+  }
+
+  @Put(':name/disks/preferences')
+  @ApiOperation({ summary: 'Switch a disk alert on or off for one mountpoint.' })
+  updateDiskPreference(
+    @Param('name') name: string,
+    @Body() body: { mountpoint: string; trendAlerts?: boolean; capacityAlerts?: boolean },
+  ) {
+    const { mountpoint, ...changes } = body;
+    if (!mountpoint) throw new BadRequestException('mountpoint is required');
+    return this.diskPrefs.update(name, mountpoint, changes);
   }
 
   @Get(':name/containers')

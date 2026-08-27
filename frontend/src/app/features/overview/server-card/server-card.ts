@@ -29,7 +29,14 @@ export class ServerCard {
 
   protected readonly cpuPercent = computed(() => this.metrics.value()?.server.cpu.percent ?? null);
   protected readonly memoryPercent = computed(() => usagePercent(this.metrics.value()?.server.memory));
-  protected readonly diskPercent = computed(() => usagePercent(this.metrics.value()?.server.disk));
+
+  /** One bar per disk, already fullest-first from the backend. */
+  protected readonly disks = computed(() =>
+    (this.metrics.value()?.server.disks ?? []).map((disk) => ({
+      mountpoint: disk.mountpoint,
+      percent: usagePercent(disk),
+    })),
+  );
 
   protected readonly uptime = computed(() => {
     const seconds = this.metrics.value()?.server.uptime.seconds;

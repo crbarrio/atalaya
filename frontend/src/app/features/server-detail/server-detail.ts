@@ -64,7 +64,32 @@ export class ServerDetailPage {
 
   protected readonly cpuPercent = computed(() => this.metrics.value()?.server.cpu.percent ?? null);
   protected readonly memoryPercent = computed(() => usagePercent(this.metrics.value()?.server.memory));
-  protected readonly diskPercent = computed(() => usagePercent(this.metrics.value()?.server.disk));
+
+  protected readonly diskPreferences = this.metricsService.diskPreferences(this.name);
+
+  /**
+   * One bar per mounted filesystem, already fullest-first from the backend,
+   * each carrying its alert switches. A disk with no stored preference has
+   * both on — that is what makes a newly added disk alert without setup.
+   */
+  protected readonly disks = computed(() => {
+    const preferences = new Map(this.diskPreferences.value().map((p) => [p.mountpoint, p]));
+    return (this.metrics.value()?.server.disks ?? []).map((disk) => ({
+      ...disk,
+      percent: usagePercent(disk),
+      trendAlerts: preferences.get(disk.mountpoint)?.trendAlerts ?? true,
+      capacityAlerts: preferences.get(disk.mountpoint)?.capacityAlerts ?? true,
+    }));
+  });
+
+  protected async toggleDiskAlert(
+    mountpoint: string,
+    field: 'trendAlerts' | 'capacityAlerts',
+    enabled: boolean,
+  ): Promise<void> {
+    await this.metricsService.updateDiskPreference(this.name(), mountpoint, { [field]: enabled });
+    this.diskPreferences.reload();
+  }
 
   /** Instance memory/CPU, keyed by name, so the table can look them up per row without re-scanning. */
   protected readonly instanceUsage = computed(
@@ -72,7 +97,6 @@ export class ServerDetailPage {
   );
 
   protected readonly memoryDaysRemaining = computed(() => this.metrics.value()?.server.memory.daysRemaining ?? null);
-  protected readonly diskDaysRemaining = computed(() => this.metrics.value()?.server.disk.daysRemaining ?? null);
 
   /** Duration of the mode SSH last recorded a status for — the two sources describe the same run. */
   protected readonly backupDuration = computed(() => {

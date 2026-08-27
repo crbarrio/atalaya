@@ -22,9 +22,10 @@ export interface RawServerMetrics {
   memoryAvailableBytes: number | null;
   memoryTotalBytes: number | null;
   memoryAvailDeriv: number | null;
-  diskAvailableBytes: number | null;
-  diskTotalBytes: number | null;
-  diskAvailDeriv: number | null;
+  /** Keyed by mountpoint: a server has as many disks as it has. */
+  diskAvailableBytes: Map<string, number>;
+  diskTotalBytes: Map<string, number>;
+  diskAvailDeriv: Map<string, number>;
   nodeUp: number | null;
   cadvisorUp: number | null;
   bootTimeSeconds: number | null;
@@ -63,9 +64,9 @@ export class MetricsReader {
       this.scalar(queries.nodeMemoryAvailableBytes(nodeInstance)),
       this.scalar(queries.nodeMemoryTotalBytes(nodeInstance)),
       this.scalar(queries.nodeMemoryAvailDeriv(nodeInstance)),
-      this.scalar(queries.nodeDiskAvailableBytes(nodeInstance)),
-      this.scalar(queries.nodeDiskTotalBytes(nodeInstance)),
-      this.scalar(queries.nodeDiskAvailDeriv(nodeInstance)),
+      this.byMountpoint(queries.nodeDiskAvailableBytes(nodeInstance)),
+      this.byMountpoint(queries.nodeDiskTotalBytes(nodeInstance)),
+      this.byMountpoint(queries.nodeDiskAvailDeriv(nodeInstance)),
       this.scalar(queries.targetUp(nodeInstance)),
       this.scalar(queries.targetUp(cadvisorInstance)),
       this.scalar(queries.nodeBootTimeSeconds(nodeInstance)),
@@ -245,6 +246,16 @@ export class MetricsReader {
   }
 
   /** One series expected per query: one target, one server. */
+  /** Every series the query returns, keyed by its `mountpoint` label. */
+  private async byMountpoint(promql: string): Promise<Map<string, number>> {
+    const samples = await this.prometheus.query(promql);
+    return new Map(
+      samples
+        .filter((s) => s.metric.mountpoint)
+        .map((s) => [s.metric.mountpoint, s.value] as const),
+    );
+  }
+
   private async scalar(promql: string): Promise<number | null> {
     const [sample] = await this.prometheus.query(promql);
     return sample?.value ?? null;

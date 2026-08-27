@@ -5,6 +5,9 @@
  * Prometheus attaches from `targets/*.json`.
  */
 
+/** Excludes the virtual mounts, leaving one series per real disk. */
+const REAL_FILESYSTEMS = 'fstype!~"tmpfs|overlay|squashfs|ramfs"';
+
 export const nodeCpuPercent = (instance: string): string =>
   `100 * (1 - avg(rate(node_cpu_seconds_total{mode="idle",instance="${instance}"}[5m])))`;
 
@@ -14,12 +17,17 @@ export const nodeMemoryAvailableBytes = (instance: string): string =>
 export const nodeMemoryTotalBytes = (instance: string): string =>
   `node_memory_MemTotal_bytes{instance="${instance}"}`;
 
-/** Root filesystem only: every server in the fleet has a single disk. */
+/**
+ * One series per mounted filesystem, not just `/`: a server can have any
+ * number of disks, and a secondary one filling up is exactly as fatal as the
+ * root one. `fstype` excludes the virtual mounts that would otherwise drown
+ * the real ones.
+ */
 export const nodeDiskAvailableBytes = (instance: string): string =>
-  `node_filesystem_avail_bytes{instance="${instance}",mountpoint="/",fstype!~"tmpfs|overlay|squashfs|ramfs"}`;
+  `node_filesystem_avail_bytes{instance="${instance}",${REAL_FILESYSTEMS}}`;
 
 export const nodeDiskTotalBytes = (instance: string): string =>
-  `node_filesystem_size_bytes{instance="${instance}",mountpoint="/",fstype!~"tmpfs|overlay|squashfs|ramfs"}`;
+  `node_filesystem_size_bytes{instance="${instance}",${REAL_FILESYSTEMS}}`;
 
 /**
  * Bytes/second, over the same 6 h window `infra/prometheus/rules/capacity.yml`
@@ -27,7 +35,7 @@ export const nodeDiskTotalBytes = (instance: string): string =>
  * the same thing as the alert that would fire on it. Negative means shrinking.
  */
 export const nodeDiskAvailDeriv = (instance: string): string =>
-  `deriv(node_filesystem_avail_bytes{instance="${instance}",mountpoint="/",fstype!~"tmpfs|overlay|squashfs|ramfs"}[6h])`;
+  `deriv(node_filesystem_avail_bytes{instance="${instance}",${REAL_FILESYSTEMS}}[6h])`;
 
 export const nodeMemoryAvailDeriv = (instance: string): string =>
   `deriv(node_memory_MemAvailable_bytes{instance="${instance}"}[6h])`;
@@ -81,8 +89,14 @@ export const containerCpuCores = (instance: string): string =>
 export const nodeMemoryUsedPercent = (instance: string): string =>
   `100 * (1 - node_memory_MemAvailable_bytes{instance="${instance}"} / node_memory_MemTotal_bytes{instance="${instance}"})`;
 
-export const nodeDiskUsedPercent = (instance: string): string =>
-  `100 * (1 - node_filesystem_avail_bytes{instance="${instance}",mountpoint="/",fstype!~"tmpfs|overlay|squashfs|ramfs"} / node_filesystem_size_bytes{instance="${instance}",mountpoint="/",fstype!~"tmpfs|overlay|squashfs|ramfs"})`;
+/**
+ * One mountpoint at a time, unlike the instant queries above: the history
+ * chart draws a single disk line alongside CPU and RAM, and a server with
+ * four disks would otherwise put six lines on one axis. Which disk to chart
+ * is the caller's choice; `/` is the default everywhere.
+ */
+export const nodeDiskUsedPercent = (instance: string, mountpoint = '/'): string =>
+  `100 * (1 - node_filesystem_avail_bytes{instance="${instance}",mountpoint="${mountpoint}",${REAL_FILESYSTEMS}} / node_filesystem_size_bytes{instance="${instance}",mountpoint="${mountpoint}",${REAL_FILESYSTEMS}})`;
 
 /**
  * Written by `stack`'s `write_deploy_metric()` (see monitoring.md), one

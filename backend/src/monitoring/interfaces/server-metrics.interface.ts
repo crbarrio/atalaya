@@ -3,17 +3,28 @@ export interface ServerMetrics {
   cpu: { percent: number | null };
   /** `daysRemaining` is null when the trend is flat or growing, not shrinking. */
   memory: { usedBytes: number | null; totalBytes: number | null; daysRemaining: number | null };
-  disk: {
-    usedBytes: number | null;
-    totalBytes: number | null;
-    mountpoint: string;
-    daysRemaining: number | null;
-  };
+  /** Every mounted filesystem, fullest first. Empty when none were scraped. */
+  disks: DiskUsage[];
   /** Null when Prometheus has no series for that target at all — never scraped, not just down. */
   scrape: { node: boolean | null; cadvisor: boolean | null };
   uptime: { seconds: number | null };
   /** 1-minute and 5-minute load average, alongside the core count needed to judge them. */
   load: { load1: number | null; load5: number | null; cpuCount: number | null };
+}
+
+/** One mounted filesystem. `daysRemaining` is null unless it is shrinking. */
+export interface DiskUsage {
+  mountpoint: string;
+  usedBytes: number | null;
+  totalBytes: number | null;
+  daysRemaining: number | null;
+}
+
+/** Which disk alerts are on for one mountpoint. Both default to true. */
+export interface DiskAlertPreferenceView {
+  mountpoint: string;
+  trendAlerts: boolean;
+  capacityAlerts: boolean;
 }
 
 /** One instance, summed across its containers. */

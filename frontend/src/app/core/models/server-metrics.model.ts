@@ -2,16 +2,26 @@
 export interface ServerMetrics {
   cpu: { percent: number | null };
   memory: { usedBytes: number | null; totalBytes: number | null; daysRemaining: number | null };
-  disk: {
-    usedBytes: number | null;
-    totalBytes: number | null;
-    mountpoint: string;
-    daysRemaining: number | null;
-  };
+  /** Every mounted filesystem, fullest first. */
+  disks: DiskUsage[];
   /** Whether Prometheus itself can reach the collector — different from whether SSH can reach the server. */
   scrape: { node: boolean | null; cadvisor: boolean | null };
   uptime: { seconds: number | null };
   load: { load1: number | null; load5: number | null; cpuCount: number | null };
+}
+
+export interface DiskUsage {
+  mountpoint: string;
+  usedBytes: number | null;
+  totalBytes: number | null;
+  daysRemaining: number | null;
+}
+
+/** Which disk alerts are on for one mountpoint. Absent row means both on. */
+export interface DiskAlertPreference {
+  mountpoint: string;
+  trendAlerts: boolean;
+  capacityAlerts: boolean;
 }
 
 export interface InstanceUsage {

@@ -22,9 +22,12 @@ import { MetaChip } from '../../shared/ui/meta-chip/meta-chip';
 export class Backups {
   private readonly serversService = inject(ServersService);
 
-  readonly servers = this.serversService.list();
+  private readonly all = this.serversService.list();
   readonly isLoading = this.serversService.isLoading;
   readonly error = this.serversService.error;
+
+  /** Host servers run no `stack`, so they have no backup to report on at all. */
+  readonly servers = computed(() => this.all().filter((s) => s.kind !== 'host'));
 
   readonly ok = computed(() => this.servers().filter((s) => s.backup.status === 'OK').length);
   readonly failing = computed(

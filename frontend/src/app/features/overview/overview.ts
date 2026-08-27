@@ -20,7 +20,14 @@ export class Overview {
     this.servers().reduce((sum, s) => sum + s.counts.total, 0),
   );
   
+  /**
+   * A host server has no backups to report — `null` there means "not
+   * applicable", not "never ran", so only its health counts.
+   */
   readonly issues = computed(
-    () => this.servers().filter((s) => s.health !== 'ok' || s.backup.status !== 'OK').length,
+    () =>
+      this.servers().filter(
+        (s) => s.health !== 'ok' || (s.kind !== 'host' && s.backup.status !== 'OK'),
+      ).length,
   );
 }

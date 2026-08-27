@@ -76,8 +76,36 @@ model Server {
   instances Instance[]
   incidents Incident[]
   checks    ProvisionCheck[]
+  disks     DiskAlertPreference[]
 
   @@map("servers")
+}
+
+/// Which disk alerts the operator wants for one mountpoint. A row exists only
+/// once something has been switched off; absent means both are on.
+///
+/// Some disks sit near-full or churn by design — a Prometheus data disk capped
+/// by its own retention, a downloads volume that fills and empties — and would
+/// otherwise alert forever for reasons nobody would act on. Excluding them in
+/// the rule file would bury that decision in YAML nobody edits; keeping it here
+/// makes it a checkbox, per server and per disk.
+model DiskAlertPreference {
+  id       String @id @default(uuid())
+  serverId String
+  server   Server @relation(fields: [serverId], references: [id], onDelete: Cascade)
+
+  /// As node_exporter reports it: `/`, `/boot`, `/var/lib/prometheus`.
+  mountpoint String
+
+  /// `DiskWillFillIn4Days` — the predict_linear projection.
+  trendAlerts Boolean @default(true)
+  /// `DiskAlmostFull` — the blunt percentage threshold.
+  capacityAlerts Boolean @default(true)
+
+  updatedAt DateTime @updatedAt
+
+  @@unique([serverId, mountpoint])
+  @@map("disk_alert_preferences")
 }
 
 // ─── Inventory cache ─────────────────────────────────────────────────────────

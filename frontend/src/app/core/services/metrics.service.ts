@@ -1,17 +1,41 @@
-import { Injectable, Signal } from '@angular/core';
-import { httpResource, HttpResourceRef } from '@angular/common/http';
+import { HttpClient, httpResource, HttpResourceRef } from '@angular/common/http';
+import { Injectable, Signal, inject } from '@angular/core';
+import { firstValueFrom } from 'rxjs';
 
 import { API_BASE } from '../http/api.config';
 import { DeployHistoryEntry, ServerHistory } from '../models/history.model';
-import { HostContainer, ServerMetricsResponse } from '../models/server-metrics.model';
+import {
+  DiskAlertPreference,
+  HostContainer,
+  ServerMetricsResponse,
+} from '../models/server-metrics.model';
 import { pollResource } from '../../shared/poll-resource';
 
 @Injectable({ providedIn: 'root' })
 export class MetricsService {
+  private readonly http = inject(HttpClient);
+
   serverMetrics(name: Signal<string>): HttpResourceRef<ServerMetricsResponse | undefined> {
     const resource = httpResource<ServerMetricsResponse>(() => `${API_BASE}/monitoring/${name()}/metrics`);
     pollResource(resource);
     return resource;
+  }
+
+  diskPreferences(name: Signal<string>): HttpResourceRef<DiskAlertPreference[]> {
+    return httpResource<DiskAlertPreference[]>(
+      () => `${API_BASE}/monitoring/${name()}/disks/preferences`,
+      { defaultValue: [] },
+    );
+  }
+
+  async updateDiskPreference(
+    name: string,
+    mountpoint: string,
+    changes: { trendAlerts?: boolean; capacityAlerts?: boolean },
+  ): Promise<void> {
+    await firstValueFrom(
+      this.http.put(`${API_BASE}/monitoring/${name}/disks/preferences`, { mountpoint, ...changes }),
+    );
   }
 
   hostContainers(name: Signal<string>): HttpResourceRef<HostContainer[]> {

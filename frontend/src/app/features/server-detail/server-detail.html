@@ -98,7 +98,7 @@
     </div>
 
     @if (metrics.value(); as m) {
-      <section class="grid grid-cols-1 gap-4 sm:grid-cols-3">
+      <section class="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <app-usage-bar
           icon="memory"
           label="CPU"
@@ -114,16 +114,47 @@
             (memoryDaysRemaining() !== null ? ' · ' + memoryDaysRemaining() + 'd left' : '')
           "
         />
-        <app-usage-bar
-          icon="storage"
-          label="Disk"
-          [percent]="diskPercent()"
-          [detail]="
-            (m.server.disk.usedBytes | bytes) + ' / ' + (m.server.disk.totalBytes | bytes) +
-            (diskDaysRemaining() !== null ? ' · ' + diskDaysRemaining() + 'd left' : '')
-          "
-        />
       </section>
+
+      @if (disks().length > 0) {
+        <section class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          @for (disk of disks(); track disk.mountpoint) {
+            <div class="flex flex-col gap-2">
+              <app-usage-bar
+                icon="storage"
+                [label]="disk.mountpoint"
+                [percent]="disk.percent"
+                [detail]="
+                  (disk.usedBytes | bytes) + ' / ' + (disk.totalBytes | bytes) +
+                  (disk.daysRemaining !== null ? ' · ' + disk.daysRemaining + 'd left' : '')
+                "
+              />
+              <!-- A disk that sits near-full or churns by design would alert
+                   forever; switching it off here beats excluding it in YAML. -->
+              <div class="flex flex-wrap gap-x-4 gap-y-1 px-1">
+                <label class="flex items-center gap-1.5" [title]="'DiskWillFillIn4Days — the trend projection'">
+                  <input
+                    type="checkbox"
+                    class="rounded-xs"
+                    [checked]="disk.trendAlerts"
+                    (change)="toggleDiskAlert(disk.mountpoint, 'trendAlerts', $any($event.target).checked)"
+                  />
+                  <span class="text-on-surface-variant text-[11px]">trend</span>
+                </label>
+                <label class="flex items-center gap-1.5" [title]="'DiskAlmostFull — the 10% threshold'">
+                  <input
+                    type="checkbox"
+                    class="rounded-xs"
+                    [checked]="disk.capacityAlerts"
+                    (change)="toggleDiskAlert(disk.mountpoint, 'capacityAlerts', $any($event.target).checked)"
+                  />
+                  <span class="text-on-surface-variant text-[11px]">capacity</span>
+                </label>
+              </div>
+            </div>
+          }
+        </section>
+      }
 
       @if (engine().length > 0) {
         <div class="flex flex-wrap justify-between gap-6 rounded-xs border border-outline-variant bg-surface-container-low p-4">
