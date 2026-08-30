@@ -278,6 +278,15 @@ export class ActionsService {
     if (/a (password|terminal) is required|not allowed to execute/i.test(message)) {
       return 'This server has not been set up for actions yet — re-run setup-server.sh on it.';
     }
+    // The dispatcher is installed but predates this command: a server set up
+    // before the subcommand existed, which is every server until it is re-run.
+    if (/is not an allowed subcommand/i.test(message)) {
+      return "This server's dispatcher is older than this command — re-run setup-server.sh on it.";
+    }
+    // Its `stack` tree became group-writable again, most likely after a pull.
+    if (/can be modified by group or other/i.test(message)) {
+      return 'This server refused to run: its `stack` directory is writable by others. Re-run setup-server.sh on it.';
+    }
     if (/No such file or directory|atalaya-stack/i.test(message) && /not found/i.test(message)) {
       return 'The command dispatcher is missing on this server — re-run setup-server.sh on it.';
     }
