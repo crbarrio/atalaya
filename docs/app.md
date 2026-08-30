@@ -4,10 +4,37 @@ The monorepo itself: backend, frontend, and what is built so far.
 
 ## Pending
 
-- [ ] The SSH client does not verify host keys. Over Tailscale the transport is already
-      authenticated end to end by WireGuard, so impersonating a node means having compromised it,
-      but this is a deliberate omission rather than an oversight and worth revisiting before
-      anything runs outside the tailnet.
+**Phase 4 — the environment variable editor.** Which variables an instance requires, which are
+missing, which are set — never their values. See [PLAN.md](PLAN.md).
+
+- [ ] **Reading which variables are set needs a `stack` contract first**, the same blocker Phase 3
+      hit: `secrets/` is `700 ubuntu` and the atalaya account cannot read it, by design. `stack`
+      already computes required/optional/missing inside `verify_secrets`, so the shape is a
+      `secrets <inst> --json` reporting names and set/unset — **never values** — alongside
+      `inventory` and `versions --json`. Nothing to design in the panel until that exists.
+- [ ] Writing them needs its own dispatcher entry, and it is the first one that takes operator
+      input rather than a name from a closed list. Whatever validates it belongs in the
+      dispatcher, where atalaya cannot reach it.
+- [ ] Write-only in the UI: a value goes in and is never rendered back, matching how notification
+      channel credentials already behave. What is shown is *which* variables are missing.
+- [ ] The file must stay `600`, and `stack deploy` already refuses if a declared variable is
+      missing or empty — so the editor should surface that check rather than duplicate it.
+
+**Deferred from Phase 3**, each its own decision rather than a leftover:
+
+- [ ] `stack retire` — removes an instance, irreversibly with `--with-data`. Needs a type-the-name
+      gate, not the inline confirm the other actions use.
+- [ ] `stack add` — creating an instance means domains, client, database and secrets, which
+      overlaps Phase 4's territory and should follow it.
+
+**Phase 5 — deploying atalaya through `stack`.** See [stack-integration.md](stack-integration.md).
+
+## Decisions, not pending work
+
+- **The SSH client does not verify host keys.** Over Tailscale the transport is already
+  authenticated end to end by WireGuard, so impersonating a node means having compromised it
+  first. A deliberate omission, not an oversight — but one to revisit before anything runs
+  outside the tailnet.
 
 ## Done
 

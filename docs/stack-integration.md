@@ -5,7 +5,26 @@ Everything atalaya needs from `stack`, and the changes made there. The repo itse
 
 ## Pending
 
-Nothing outstanding.
+**Phase 4 needs a secrets contract.** `stack` already computes required/optional/missing inside
+`verify_secrets`; the panel cannot, because `secrets/` is `700 ubuntu`. Tasks tracked in
+[app.md](app.md), but the `stack` half lands here:
+
+- [ ] `stack secrets <inst> --json` — variable names and whether each is set. **Never values**;
+      that is the whole reason it can be exposed at all.
+- [ ] A dispatcher entry for writing one. The first that carries operator input rather than a
+      name from a closed list, so its validation matters more than the others'.
+
+**Phase 5 — atalaya as a `stack` instance.** Adding it to the catalogue closes the circle and
+drops the one bespoke deployment path. Not obviously right, and worth deciding before building:
+
+- [ ] Resolve the conflict [PLAN.md](PLAN.md) already records — atalaya's identity model is
+      `tailscale serve` injecting a header into a loopback-bound process, while `stack` reaches
+      instances only through Traefik by domain. Putting atalaya behind `stack` reintroduces the
+      container-cannot-reach-host-loopback problem `network_mode: host` exists to solve.
+- [ ] Decide what happens when atalaya deploys itself and the container restarts mid-action: the
+      audit row is written on completion, so it would be lost.
+- [ ] Weigh it against what replaced the old flow: install is already `git clone` plus three
+      compose commands, so the bespoke path this phase removes is no longer very bespoke.
 
 ## Done
 
