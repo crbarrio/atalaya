@@ -4,12 +4,18 @@ The monorepo itself: backend, frontend, and what is built so far.
 
 ## Pending
 
-**Deferred from Phase 3**, each its own decision rather than a leftover:
+**`stack add` from the panel** — the last thing that still needs a terminal, and now the natural
+next step rather than a leftover: the declaration is machine state with a single writer, so
+creating an instance is another dispatcher entry rather than a fight with git.
 
-- [ ] `stack retire` — removes an instance, irreversibly with `--with-data`. Needs a type-the-name
-      gate, not the inline confirm the other actions use.
-- [ ] `stack add` — creating an instance means domains, client, database and secrets, which
-      overlaps Phase 4's territory and should follow it.
+- [ ] A dispatcher entry carrying several free-form fields — domains, client, database name — where
+      `secrets --set` carries one document and everything else carries a name from a closed list.
+      Domains need their own validator.
+- [ ] The form, and what follows it: the DNS record has to exist before the first deploy, and the
+      variables have to be filled in — which the Phase 4 editor already does.
+- [ ] A newly declared instance is probed for its certificate before it has one, so it alerts until
+      it is deployed. Seen for real while testing `retire`. The probe list should probably follow
+      what is *deployed*, not what is declared.
 
 ## Decisions, not pending work
 
@@ -174,6 +180,37 @@ The monorepo itself: backend, frontend, and what is built so far.
       listing what the application declares, which are set and which are missing, with set, change
       and unset. Write-only in the strict sense — the input starts empty every time because
       nothing on this side ever knew the value. See below.
+- [x] **Retiring an instance — 2026-08-30**: both forms, in a danger zone of its own. See below.
+- [x] **The server page no longer blanks when Prometheus is unreachable — 2026-08-30**: it read
+      `metrics.value()` in twelve computeds and once in its template, and reading an errored
+      resource throws. The same defect as the instance page in August, in the one place the guard
+      was not applied — found because retiring an instance navigates here.
+
+## Retiring an instance — 2026-08-30
+
+Both forms, because `stack retire --with-data` exists and there are reasons to want it. Leaving it
+out was not a security decision; it was taking the operator's decision for them. What the panel
+owes them instead is a gate proportionate to the act, and no way to reach it by accident.
+
+- **Retire** keeps the volumes, the database and the secrets. `stack add --reuse-secrets` puts the
+  instance back exactly as it was, which is what makes this the safe default.
+- **Retire and delete the data** does not come back. It lists what it will destroy *by name* —
+  every volume with its size, the database, the secrets file — and needs the instance name typed
+  **and** a separate acknowledgement.
+
+Two allowlist entries rather than one flag, matching `secrets`/`secretsSet`: the granted thing is a
+name, so `AuditEntry` reads `stack retire` or `stack retire --with-data` without anything having to
+parse arguments back out to tell which happened.
+
+One detail worth keeping. The volume list distinguishes **"no volumes"** from **"volumes never
+measured"**: the sizes come from the last backup, so an instance that has never been backed up
+reports `null`. Collapsing that to an empty list would have a destructive confirmation promise that
+nothing would be deleted while `docker volume rm` was about to run.
+
+`stack retire` runs a full backup first and refuses if it fails. That is not decoration — the first
+attempt against a throwaway instance stopped with *"the final backup failed: nothing was retired"*
+because its database was empty enough for the dump to fall below the minimum, and the instance was
+left completely intact.
 
 ## The variable editor — 2026-08-30
 

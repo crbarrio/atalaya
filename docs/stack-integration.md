@@ -38,6 +38,55 @@ decided already. See *Why not `stack`* in [app.md](app.md).
       referenced it. Recoverable from history if the rename ever needs retracing.
 - [x] `stack secrets <inst> {--json|--set}` — the variables of one instance, read and written.
       See below.
+- [x] The instance declaration left git and became machine state. See below.
+- [x] `add` and `retire` rebuild the manifest they changed. `merge_manifest` runs at startup,
+      before the declaration is written, so `stack inventory` — which is what atalaya reads — kept
+      reporting the old set until some unrelated command happened to run.
+
+## The declaration is machine state — 2026-08-30
+
+`servers/<server>.json` says what this machine runs, and `stack add`/`stack retire` rewrite it in
+place. It was also tracked in git, so one file had two owners — and the machines had already won
+without anyone noticing:
+
+```diff
+   "wanikani": {
+-    "client": "wanikani",
+-    "database": "wnikani"      ← the repository
++    "database": "wanikani"     ← the machine
+```
+
+That correction was live on `marsella-test` and in no commit. A `git checkout --` or a fresh clone
+would have pointed the instance at a database that does not exist.
+
+`.gitignore` already drew the line, in these words: *"Deployed version of each application. This is
+server state, not project state: each machine runs its own."* `servers/` was the last piece of
+per-machine state on the wrong side of it, and the only one that had drifted. Applying the existing
+rule, not inventing one.
+
+**The file did not move**, only stopped being tracked. Relocating it to `state/` would have touched
+`server_file()`, `merge_manifest`, `backup.sh`, both Python scripts and three documents for no
+functional gain — and an ignored directory inside the repo is already the pattern here, shared with
+`secrets/`, `backups/`, `apps/*/docker-compose.yml` and `traefik/dynamic/*.yml`.
+
+**One writer, one copy.** `stack` still writes it; the terminal and the panel are two ways of
+invoking `stack`, exactly as they already are for `deploy`. atalaya gains no second source of truth
+— its `Instance` table stays a cache of what `inventory` reports. So the drift ends, each server
+stays self-sufficient with atalaya down, everything is doable from the panel, and there is nothing
+to reconcile.
+
+Safety did not need adding: `backup.sh` already copies `servers/` into the encrypted engine
+archive. `RESTORE.md` now says that archive is the only copy. atalaya's inventory cache is a second,
+independent replica of the same facts.
+
+`merge_manifest` creates an empty declaration when there is none, and `merge.py` stopped treating
+"no instances" as an error — a machine that was just set up can now run `stack add` without a file
+written by hand first, which is what onboarding a server from the panel will need.
+
+**Migration.** A commit that deletes tracked files still deletes them from the working tree on
+`git pull`, ignored or not. Each server's live copy was taken first, then the pull, then the copy
+restored — so the machine's version became the truth with no repo copy left to contradict it. Git
+refused the pull on `marsella-test` outright, protecting the drift rather than overwriting it.
 
 ## The backup as a metric — 2026-08-18
 
@@ -228,8 +277,13 @@ change. The JSON rows are collected while that output is produced, so the two ca
 
 **`exec` is absent and must stay absent.** `stack exec` is `docker compose exec <svc>
 <command...>` — a remote shell, which is the one thing PLAN.md prohibits outright. `retire` and
-`add` are absent too: destructive and configuration-writing respectively, each its own decision
+`add` is absent too: creating an instance writes secrets and a database, which is its own decision
 rather than a parameter.
+
+`retire` was absent when this was written and is present now, in **both** its forms — including
+`--with-data`, which deletes the volumes, the database and the secrets. Withholding it was taking
+the operator's decision for them. The dispatcher accepts the flag only as the exact second
+argument, so a malformed call cannot become a deletion, and `verify()` asserts that.
 
 `inventory` deliberately does **not** go through the dispatcher. It still runs directly and
 unprivileged, so the panel keeps reading a server whose dispatcher has not been installed yet —

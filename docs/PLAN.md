@@ -333,8 +333,8 @@ wildcard-free sudo rule; the reasoning, the rejected alternatives and what it ho
 in [stack-integration.md](stack-integration.md).
 
 Out of scope, each for its own reason: **`exec`** is a remote shell and stays prohibited;
-**`retire`** is destructive and needs a type-the-name gate before it is offered; **`add`** writes
-secrets and belongs with Phase 4.
+**`retire`** is destructive and needs a type-the-name gate before it is offered (added 2026-08-30,
+in both its forms — see [app.md](app.md)); **`add`** writes secrets and belongs with Phase 4.
 
 Provisioning is **not here**: it was solved in v1 by generating the artifact instead of running
 it, and there is no intention of later "promoting" it to remote execution.
