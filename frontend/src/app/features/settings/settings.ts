@@ -3,6 +3,7 @@ import { form, FormField, submit } from '@angular/forms/signals';
 
 import { SettingsService } from '../../core/services/settings.service';
 import { NotificationChannels } from './notification-channels/notification-channels';
+import { errorMessage } from '../../shared/error-message';
 
 @Component({
   selector: 'app-settings',
@@ -48,12 +49,4 @@ export class SettingsPage {
       }
     });
   }
-}
-
-function errorMessage(error: unknown): string {
-  if (error && typeof error === 'object' && 'error' in error) {
-    const body = (error as { error?: { message?: string } }).error;
-    if (body?.message) return body.message;
-  }
-  return 'Something went wrong.';
 }

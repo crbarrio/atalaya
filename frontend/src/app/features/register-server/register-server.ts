@@ -4,6 +4,7 @@ import { form, FormField, required, submit } from '@angular/forms/signals';
 import { ProvisionCheck } from '../../core/models/registration.model';
 import { Server } from '../../core/models/server.model';
 import { RegistrationService } from '../../core/services/registration.service';
+import { errorMessage } from '../../shared/error-message';
 
 @Component({
   selector: 'app-register-server',
@@ -55,12 +56,4 @@ export class RegisterServer {
   onClose() {
     this.closed.emit();
   }
-}
-
-function errorMessage(error: unknown): string {
-  if (error && typeof error === 'object' && 'error' in error) {
-    const body = (error as { error?: { message?: string } }).error;
-    if (body?.message) return body.message;
-  }
-  return 'Something went wrong.';
 }

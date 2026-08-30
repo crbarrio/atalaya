@@ -1,8 +1,8 @@
 /**
  * The reason out of a failed HTTP call, as Nest puts it in the body.
  *
- * Three components carry their own copy of this; this is the shared one, and
- * they should move onto it rather than a fourth appearing.
+ * Was copied verbatim into three components before a fourth wanted it. The
+ * copies were identical, so this is a move rather than a merge.
  */
 export function errorMessage(error: unknown): string {
   if (error && typeof error === 'object' && 'error' in error) {

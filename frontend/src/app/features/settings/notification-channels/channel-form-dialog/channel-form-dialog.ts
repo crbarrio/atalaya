@@ -4,6 +4,7 @@ import { FieldTree, form, FormField, required, submit } from '@angular/forms/sig
 
 import { ChannelsService } from '../../../../core/services/channels.service';
 import { ChannelType, CreateChannelRequest, NotificationChannel } from '../../../../core/models/channel.model';
+import { errorMessage } from '../../../../shared/error-message';
 
 interface ChannelFormModel {
   name: string;
@@ -150,12 +151,4 @@ export class ChannelFormDialog {
       .filter(([isMissing]) => isMissing)
       .map(([, fieldTree, message]) => ({ fieldTree, kind: 'server', message }));
   }
-}
-
-function errorMessage(error: unknown): string {
-  if (error && typeof error === 'object' && 'error' in error) {
-    const body = (error as { error?: { message?: string } }).error;
-    if (body?.message) return body.message;
-  }
-  return 'Something went wrong.';
 }
