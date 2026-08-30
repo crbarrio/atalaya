@@ -422,15 +422,21 @@ setup_atalaya_user() {
 # write, rather than in sudoers globs or in the panel's own code.
 #
 # `exec` is absent on purpose and must stay absent: `stack exec` is
-# `docker compose exec <svc> <command...>`, which is a remote shell. `add` is
-# absent because creating an instance writes secrets and a database, which is
-# its own decision rather than a parameter.
+# `docker compose exec <svc> <command...>`, which is a remote shell. `engine`
+# is absent because one unqualified word acts on every instance at once.
 #
 # `retire` is present in both its forms, including `--with-data`, which deletes
 # the volumes, the database and the secrets. That is the operator's decision to
 # take, not one to hide behind a missing option — what this file does is make
 # sure it can only be asked for explicitly, never as a side effect of a
 # malformed argument.
+#
+# `add` is present, and is the widest entry here: it carries values that are not
+# names — domains, a client, a database — so it is the one case that parses its
+# arguments rather than matching a fixed shape. Same rule as the rest, applied
+# per flag: each at most once, each value against a validator, anything else
+# refused. What it may NOT carry is as important as what it may — `--catalogue`
+# and `--secrets-dir` would redirect it at files of the caller's choosing.
 #
 # `secrets` is how the panel reaches secrets/ despite the account not being able
 # to open it — through this program, as the owner, and only in the two shapes
@@ -508,6 +514,11 @@ fi
 
 # One shape for every name we pass on. Refused here, before `stack` is reached.
 valid_name() { [[ "$1" =~ ^[a-z0-9][a-z0-9._-]*$ ]]; }
+# `add` is the one entry carrying values that are not names, so it brings its
+# own shapes. Both are narrower than what `stack` itself would accept: a domain
+# becomes a Traefik router rule and a database name becomes SQL.
+valid_domain() { [[ "$1" =~ ^[a-z0-9]([a-z0-9.-]{0,251}[a-z0-9])?$ ]]; }
+valid_database() { [[ "$1" =~ ^[a-z0-9_]{1,64}$ ]]; }
 
 subcommand="${1:-}"
 shift || true
@@ -543,6 +554,58 @@ case "$subcommand" in
     [[ "${1:-}" == "full" || "${1:-}" == "incremental" ]] \
       || die "backup takes 'full' or 'incremental'"
     [[ $# -eq 1 ]] || die "backup takes no further arguments"
+    ;;
+  add)
+    # The only entry whose arguments are not all names, and the only one that
+    # brings an instance into existence. Walked flag by flag rather than matched
+    # as a whole shape: each flag at most once, each value against a validator
+    # of its own, and anything unrecognised refused outright. `stack add` has
+    # options this must never pass on, and an allowlist that worked by naming
+    # what to reject would grow a hole the day `stack` grows a flag.
+    [[ $# -ge 1 ]] || die "add needs an instance"
+    valid_name "$1" || die "bad instance name"
+    rest=("${@:2}")
+    add_app="" add_client="" add_database="" add_domains=0
+    add_reuse=0 add_dry=0 add_json=0
+    while [[ ${#rest[@]} -gt 0 ]]; do
+      case "${rest[0]}" in
+        --app)
+          [[ -z "$add_app" ]] || die "--app given twice"
+          [[ ${#rest[@]} -ge 2 ]] || die "--app needs a value"
+          valid_name "${rest[1]}" || die "bad app name"
+          add_app="${rest[1]}"; rest=("${rest[@]:2}") ;;
+        --domain)
+          [[ ${#rest[@]} -ge 2 ]] || die "--domain needs a value"
+          valid_domain "${rest[1]}" || die "bad domain"
+          add_domains=$((add_domains + 1))
+          [[ $add_domains -le 10 ]] || die "too many domains"
+          rest=("${rest[@]:2}") ;;
+        --client)
+          [[ -z "$add_client" ]] || die "--client given twice"
+          [[ ${#rest[@]} -ge 2 ]] || die "--client needs a value"
+          valid_name "${rest[1]}" || die "bad client name"
+          add_client="${rest[1]}"; rest=("${rest[@]:2}") ;;
+        --database)
+          [[ -z "$add_database" ]] || die "--database given twice"
+          [[ ${#rest[@]} -ge 2 ]] || die "--database needs a value"
+          valid_database "${rest[1]}" || die "bad database name"
+          add_database="${rest[1]}"; rest=("${rest[@]:2}") ;;
+        # Keeps an existing secrets file instead of refusing: the way a retired
+        # instance comes back, and the reason `retire` leaves that file behind.
+        --reuse-secrets)
+          [[ $add_reuse -eq 0 ]] || die "--reuse-secrets given twice"
+          add_reuse=1; rest=("${rest[@]:1}") ;;
+        --dry-run)
+          [[ $add_dry -eq 0 ]] || die "--dry-run given twice"
+          add_dry=1; rest=("${rest[@]:1}") ;;
+        --json)
+          [[ $add_json -eq 0 ]] || die "--json given twice"
+          add_json=1; rest=("${rest[@]:1}") ;;
+        *) die "refused: '${rest[0]}' is not an allowed 'add' option" ;;
+      esac
+    done
+    [[ -n "$add_app" ]] || die "add needs --app"
+    [[ $add_domains -ge 1 ]] || die "add needs at least one --domain"
     ;;
   retire)
     [[ $# -ge 1 ]] || die "retire needs an instance"
@@ -760,9 +823,10 @@ verify() {
       fi
 
       # The refusals are the point of the dispatcher, so they are asserted, not
-      # assumed. `exec` would be a remote shell; `add` writes secrets.
+      # assumed. `exec` is `docker compose exec`, which is a remote shell;
+      # `engine` acts on every instance at once from one unqualified word.
       local refused=0 forbidden
-      for forbidden in exec add engine; do
+      for forbidden in exec engine; do
         if sudo -n -u "$STACK_OWNER" /usr/local/sbin/atalaya-stack "$forbidden" x 2>/dev/null; then
           fail "the dispatcher ACCEPTED '$forbidden' — it must not"
           failures=$((failures + 1))
@@ -811,6 +875,28 @@ verify() {
         # shellcheck disable=SC2086
         if sudo -n -u "$STACK_OWNER" /usr/local/sbin/atalaya-stack retire $bad 2>/dev/null; then
           fail "the dispatcher ACCEPTED 'retire $bad'"
+          failures=$((failures + 1))
+        else
+          refused=$((refused + 1))
+        fi
+      done
+
+      # `add` is the widest entry — several free-form values — so its grammar is
+      # asserted rather than trusted: incomplete forms, a flag `stack add`
+      # accepts but this must not pass on, and a value that would reach Traefik
+      # or SQL as something other than a name. Every shape here must be refused
+      # before `stack` is reached; the accepting case cannot be asserted without
+      # creating a real instance, so it is exercised by hand instead.
+      for bad in \
+          "x" \
+          "x --app fincas" \
+          "x --app fincas --domain a.example.com --secrets-dir /tmp" \
+          "x --app fincas --domain 'a; rm -rf /'" \
+          "x --app fincas --domain a.example.com --database 'a;b'" \
+          "x --app fincas --domain a.example.com --app otra"; do
+        # shellcheck disable=SC2086
+        if sudo -n -u "$STACK_OWNER" /usr/local/sbin/atalaya-stack add $bad 2>/dev/null; then
+          fail "the dispatcher ACCEPTED 'add $bad'"
           failures=$((failures + 1))
         else
           refused=$((refused + 1))

@@ -4,18 +4,7 @@ The monorepo itself: backend, frontend, and what is built so far.
 
 ## Pending
 
-**`stack add` from the panel** — the last thing that still needs a terminal, and now the natural
-next step rather than a leftover: the declaration is machine state with a single writer, so
-creating an instance is another dispatcher entry rather than a fight with git.
-
-- [ ] A dispatcher entry carrying several free-form fields — domains, client, database name — where
-      `secrets --set` carries one document and everything else carries a name from a closed list.
-      Domains need their own validator.
-- [ ] The form, and what follows it: the DNS record has to exist before the first deploy, and the
-      variables have to be filled in — which the Phase 4 editor already does.
-- [ ] A newly declared instance is probed for its certificate before it has one, so it alerts until
-      it is deployed. Seen for real while testing `retire`. The probe list should probably follow
-      what is *deployed*, not what is declared.
+Nothing outstanding. Every `stack` operation that has a place in a panel now has one.
 
 ## Decisions, not pending work
 
@@ -181,10 +170,40 @@ creating an instance is another dispatcher entry rather than a fight with git.
       and unset. Write-only in the strict sense — the input starts empty every time because
       nothing on this side ever knew the value. See below.
 - [x] **Retiring an instance — 2026-08-30**: both forms, in a danger zone of its own. See below.
+- [x] **Creating an instance — 2026-08-30**: `stack add` from the server page, previewed before it
+      is committed to, with what still has to happen afterwards spelled out. See below.
+- [x] **The certificate probe follows what is deployed — 2026-08-30**: a declared instance has no
+      certificate until Traefik has asked for one, so probing on declaration alerted through the
+      whole DNS-then-variables-then-deploy sequence. `version` is null until a deploy succeeds,
+      which is exactly that line.
 - [x] **The server page no longer blanks when Prometheus is unreachable — 2026-08-30**: it read
       `metrics.value()` in twelve computeds and once in its template, and reading an errored
       resource throws. The same defect as the instance page in August, in the one place the guard
       was not applied — found because retiring an instance navigates here.
+
+## Creating an instance — 2026-08-30
+
+`stack add` from the server page. Three steps, and the middle one is not decoration: `--dry-run`
+validates everything and works out the database, its user and which variables will still be
+missing — from the same code that will do the work. What the operator confirms is therefore what
+happens, rather than a description written on this side and free to drift.
+
+The last step is the part a form usually gets wrong. Creating an instance does not create a running
+application, so the dialog ends by saying what is left: point the DNS here, fill in the variables
+(the editor two sections down does that), then deploy. Those are ordered because they have to be —
+Traefik asks for the certificate on the way up, and it fails if the name does not arrive here yet.
+
+Two things the server is left to decide:
+
+- **The database name** is a placeholder, not a default typed into the field. Left empty, `stack`
+  derives it, and the field shows what that would be.
+- **`--reuse-secrets` is offered only once the server has said it is needed.** The one reason to
+  want it is a secrets file left behind by a `retire` without `--with-data`; offering it unprompted
+  would invite keeping a file that belongs to a different instance.
+
+Building it turned up a real defect in `stack`: `add --json` printed `psql`'s narration — `DO`,
+`CREATE DATABASE` — to stdout in front of the plan, so the only caller that reads that contract
+parsed the chatter and got nothing. Both writers moved to stderr.
 
 ## Retiring an instance — 2026-08-30
 

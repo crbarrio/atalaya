@@ -1,0 +1,274 @@
+<div class="flex max-h-[90vh] w-[95vw] flex-col rounded-xs border border-outline bg-surface-container shadow-sm sm:w-auto sm:min-w-2xl sm:max-w-4xl">
+  <div class="flex shrink-0 items-center justify-between border-b border-border px-6 py-4">
+    <h2 class="font-jetbrains text-lg font-semibold uppercase">
+      New instance
+      <span class="text-on-surface-variant text-sm normal-case">on {{ server }}</span>
+    </h2>
+
+    <button
+      type="button"
+      class="flex rounded-xs border border-outline-variant p-2 text-on-surface transition hover:cursor-pointer hover:border-primary hover:bg-surface hover:text-primary"
+      (click)="onClose()"
+      aria-label="Close">
+      <span class="material-symbols-outlined text-xl leading-none">close</span>
+    </button>
+  </div>
+
+  <div class="flex flex-1 flex-col gap-6 overflow-auto bg-surface px-6 py-4">
+
+    @if (created(); as done) {
+      <!-- 3. Declared. Deliberately not called "deployed": nothing is serving yet. -->
+      <div class="rounded-xs border border-secondary/30 bg-secondary/10 p-3 text-xs text-secondary">
+        '{{ done.instance }}' is declared on {{ server }}. Nothing is serving yet.
+        @if (done.engine) {
+          Database <span class="font-jetbrains">{{ done.database }}</span> was created on {{ done.engine }}.
+        }
+        @if (done.reusedSecrets) {
+          Its existing secrets file was kept as it was.
+        }
+      </div>
+
+      <div class="flex flex-col gap-2 rounded-xs border border-outline-variant bg-surface-container-low p-4">
+        <h3 class="font-jetbrains text-sm uppercase tracking-wide text-on-surface">1. Point the DNS here</h3>
+        <p class="text-on-surface-variant text-xs">
+          Each domain has to resolve to this machine before the first deploy — Traefik asks for the
+          certificate on the way up, and the request fails if the name does not arrive here.
+        </p>
+        <ul class="mt-1 flex flex-col gap-1">
+          @for (domain of done.domains; track domain) {
+            <li class="font-jetbrains text-xs text-on-surface">{{ domain }}</li>
+          }
+        </ul>
+      </div>
+
+      <div class="flex flex-col gap-2 rounded-xs border border-outline-variant bg-surface-container-low p-4">
+        <h3 class="font-jetbrains text-sm uppercase tracking-wide text-on-surface">2. Fill in the variables</h3>
+        @if (done.pendingVariables.length > 0) {
+          <p class="text-on-surface-variant text-xs">
+            These are declared by {{ done.app }} and could not be worked out. `stack deploy` refuses
+            while any is missing — the instance's Variables panel is where they go.
+          </p>
+          <div class="mt-1 flex flex-wrap gap-1.5">
+            @for (name of done.pendingVariables; track name) {
+              <span class="rounded-xs border border-outline-variant px-2 py-0.5 font-jetbrains text-[11px] text-on-surface">
+                {{ name }}
+              </span>
+            }
+          </div>
+        } @else {
+          <p class="text-on-surface-variant text-xs">
+            Nothing pending — every required variable was worked out from the catalogue.
+          </p>
+        }
+      </div>
+
+      <div class="flex flex-col gap-2 rounded-xs border border-outline-variant bg-surface-container-low p-4">
+        <h3 class="font-jetbrains text-sm uppercase tracking-wide text-on-surface">3. Deploy</h3>
+        <p class="text-on-surface-variant text-xs">
+          From the instance's own page. The certificate probe starts watching these domains once a
+          deploy has succeeded, not before.
+        </p>
+      </div>
+
+      <button
+        type="button"
+        (click)="open()"
+        class="w-fit rounded-xs bg-primary px-4 py-2 font-jetbrains text-xs uppercase text-on-primary">
+        Open {{ done.instance }}
+      </button>
+
+    } @else if (plan(); as p) {
+      <!-- 2. What the server says would happen. Its answer, not one composed here. -->
+      <p class="text-on-surface-variant text-xs">
+        {{ server }} validated this and wrote nothing. Creating it does exactly the following.
+      </p>
+
+      <dl class="grid grid-cols-[auto_1fr] gap-x-6 gap-y-2 rounded-xs border border-outline-variant bg-surface-container-low p-4 text-sm">
+        <dt class="text-on-surface-variant font-jetbrains text-xs uppercase">Instance</dt>
+        <dd class="font-jetbrains text-on-surface">{{ p.instance }} ({{ p.app }})</dd>
+
+        @if (p.client) {
+          <dt class="text-on-surface-variant font-jetbrains text-xs uppercase">Client</dt>
+          <dd class="text-on-surface">{{ p.client }}</dd>
+        }
+
+        <dt class="text-on-surface-variant font-jetbrains text-xs uppercase">Domains</dt>
+        <dd class="text-on-surface">
+          @for (domain of p.domains; track domain) {
+            <span class="font-jetbrains">{{ domain }}</span>@if (!$last) {, }
+          }
+        </dd>
+
+        @if (p.engine) {
+          <dt class="text-on-surface-variant font-jetbrains text-xs uppercase">Database</dt>
+          <dd class="text-on-surface">
+            <span class="font-jetbrains">{{ p.database }}</span> on {{ p.engine }}, user
+            <span class="font-jetbrains">{{ p.dbUser }}</span> — created now
+          </dd>
+        }
+
+        <dt class="text-on-surface-variant font-jetbrains text-xs uppercase">Secrets</dt>
+        <dd class="text-on-surface">
+          <span class="font-jetbrains">{{ p.secretsFile }}</span>
+          {{ p.reusedSecrets ? '— kept as it is' : '— written, mode 600' }}
+        </dd>
+
+        @if (p.pendingVariables.length > 0) {
+          <dt class="text-on-surface-variant font-jetbrains text-xs uppercase">To fill in</dt>
+          <dd class="font-jetbrains text-on-surface">{{ p.pendingVariables.join(', ') }}</dd>
+        }
+      </dl>
+
+      @if (error(); as message) {
+        <p class="rounded-xs border border-error/30 bg-error/10 p-3 text-xs text-error">{{ message }}</p>
+      }
+
+      <div class="flex gap-2">
+        <button
+          type="button"
+          (click)="back()"
+          [disabled]="busy()"
+          class="rounded-xs border border-outline-variant px-4 py-2 font-jetbrains text-xs uppercase text-on-surface hover:bg-surface-container-highest disabled:opacity-50">
+          Back
+        </button>
+        <button
+          type="button"
+          (click)="create()"
+          [disabled]="busy()"
+          class="rounded-xs bg-primary px-4 py-2 font-jetbrains text-xs uppercase text-on-primary disabled:opacity-50">
+          {{ busy() ? 'Creating…' : 'Create' }}
+        </button>
+      </div>
+
+    } @else {
+      <!-- 1. The declaration. -->
+      <div class="grid gap-4 sm:grid-cols-2">
+        <label class="flex flex-col gap-2">
+          <span class="text-on-surface-variant text-xs uppercase tracking-wide">Application</span>
+          <select
+            [value]="app()"
+            (change)="set('app', $event)"
+            class="rounded-xs border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface">
+            <option value="">Choose…</option>
+            @for (a of apps(); track a.name) {
+              <option [value]="a.name">{{ a.name }}</option>
+            }
+          </select>
+          @if (chosen(); as a) {
+            <span class="text-on-surface-variant text-xs">
+              {{ a.description ?? 'No description in apps.json' }}
+              @if (a.database) { · {{ a.database }} }
+            </span>
+          }
+        </label>
+
+        <label class="flex flex-col gap-2">
+          <span class="text-on-surface-variant text-xs uppercase tracking-wide">Instance name</span>
+          <input
+            [value]="instance()"
+            (input)="set('instance', $event)"
+            placeholder="acme"
+            class="rounded-xs border border-outline-variant bg-surface-container-lowest px-3 py-2 font-jetbrains text-sm text-on-surface" />
+          <span class="text-on-surface-variant text-xs">
+            Becomes the compose project, the volume prefix and the secrets file name.
+          </span>
+        </label>
+      </div>
+
+      @if (alreadyHere().length > 0) {
+        <p class="rounded-xs border border-outline-variant bg-surface-container-low p-3 text-xs text-on-surface-variant">
+          {{ app() }} already runs here as
+          @for (d of alreadyHere(); track d.instance) {
+            <span class="font-jetbrains text-on-surface">{{ d.instance }}</span>@if (!$last) {, }
+          }
+          — several instances of one application are normal, the name just has to differ.
+        </p>
+      }
+
+      <div class="flex flex-col gap-2">
+        <span class="text-on-surface-variant text-xs uppercase tracking-wide">Domains</span>
+        @for (domain of domains(); track $index) {
+          <div class="flex gap-2">
+            <input
+              [value]="domain"
+              (input)="setDomain($index, $event)"
+              placeholder="acme.example.com"
+              class="flex-1 rounded-xs border border-outline-variant bg-surface-container-lowest px-3 py-2 font-jetbrains text-sm text-on-surface" />
+            @if (domains().length > 1) {
+              <button
+                type="button"
+                (click)="removeDomain($index)"
+                class="flex rounded-xs border border-outline-variant p-2 text-on-surface-variant hover:border-error hover:text-error"
+                aria-label="Remove domain">
+                <span class="material-symbols-outlined text-lg leading-none">close</span>
+              </button>
+            }
+          </div>
+        }
+        <button
+          type="button"
+          (click)="addDomain()"
+          class="w-fit rounded-xs border border-outline-variant px-3 py-1.5 font-jetbrains text-[11px] uppercase text-on-surface hover:bg-surface-container-highest">
+          Add another domain
+        </button>
+      </div>
+
+      <div class="grid gap-4 sm:grid-cols-2">
+        <label class="flex flex-col gap-2">
+          <span class="text-on-surface-variant text-xs uppercase tracking-wide">Client (optional)</span>
+          <input
+            [value]="client()"
+            (input)="set('client', $event)"
+            placeholder="acme"
+            class="rounded-xs border border-outline-variant bg-surface-container-lowest px-3 py-2 font-jetbrains text-sm text-on-surface" />
+          <span class="text-on-surface-variant text-xs">
+            Labels the containers, so SSH and Prometheus can be joined on it.
+          </span>
+        </label>
+
+        @if (chosen()?.database) {
+          <label class="flex flex-col gap-2">
+            <span class="text-on-surface-variant text-xs uppercase tracking-wide">Database (optional)</span>
+            <input
+              [value]="database()"
+              (input)="set('database', $event)"
+              [placeholder]="defaultDatabase() || 'from the instance name'"
+              class="rounded-xs border border-outline-variant bg-surface-container-lowest px-3 py-2 font-jetbrains text-sm text-on-surface" />
+            <span class="text-on-surface-variant text-xs">
+              Created on {{ chosen()!.database }} with a user and a generated password, both written
+              straight into the secrets file.
+            </span>
+          </label>
+        }
+      </div>
+
+      @if (reuseOffered()) {
+        <label class="flex items-start gap-3 rounded-xs border border-outline-variant bg-surface-container-low p-3">
+          <input type="checkbox" [checked]="reuseSecrets()" (change)="toggleReuse($event)" class="mt-0.5" />
+          <span class="text-on-surface-variant text-xs">
+            Keep the secrets file that is already there. It belongs to an instance retired without
+            deleting its data — the database user and password in it still work, and a new file would
+            only generate ones that do not.
+          </span>
+        </label>
+      }
+
+      @if (error(); as message) {
+        <p class="rounded-xs border border-error/30 bg-error/10 p-3 text-xs text-error">{{ message }}</p>
+      }
+
+      <div class="flex items-center gap-3">
+        <button
+          type="button"
+          (click)="preview()"
+          [disabled]="busy() || problem() !== null"
+          class="rounded-xs bg-primary px-4 py-2 font-jetbrains text-xs uppercase text-on-primary disabled:opacity-50">
+          {{ busy() ? 'Checking…' : 'Continue' }}
+        </button>
+        @if (problem(); as message) {
+          <span class="text-on-surface-variant text-xs">{{ message }}</span>
+        }
+      </div>
+    }
+  </div>
+</div>

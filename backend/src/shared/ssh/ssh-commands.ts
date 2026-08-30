@@ -32,6 +32,8 @@ export type CommandName =
   | 'start'
   | 'stop'
   | 'backup'
+  | 'add'
+  | 'addPreview'
   | 'retire'
   | 'retireWithData'
   | 'secrets'
@@ -85,6 +87,27 @@ export const COMMANDS: Record<CommandName, CommandSpec> = {
   // Streams whole volumes to remote storage; on a large instance this is hours.
   backup: { kind: 'mutate', streams: true, timeoutMs: 4 * 60 * 60_000, needsInstance: false },
 
+  // Brings an instance into existence: declares it, writes its secrets file and
+  // creates its database. The one command whose instance does NOT have to exist
+  // first, hence `needsInstance: false` — the check `resolve()` makes for every
+  // other command would reject exactly the name being created.
+  //
+  // Collected rather than streamed: what matters is the plan it returns —
+  // database, user, and which variables are still to be filled in — and that is
+  // JSON, not a console to watch.
+  add: { kind: 'mutate', streams: false, timeoutMs: 3 * 60_000, needsInstance: false },
+  // The same command with `--dry-run`, which writes nothing and declares
+  // nothing. A `read` for that reason: no lock, no audit row, and the panel can
+  // show what would happen before anyone commits to it.
+  addPreview: {
+    kind: 'read',
+    streams: false,
+    timeoutMs: 60_000,
+    needsInstance: false,
+    subcommand: 'add',
+    label: 'add --dry-run',
+  },
+
   // Takes an instance out of service. Both run a full backup first and refuse
   // if it fails, so the timeout is the backup's, not a lifecycle command's.
   //
@@ -131,7 +154,31 @@ export interface CommandRequest {
   version?: string;
   /** `versions` only: ask for the machine-readable form instead of the printed one. */
   json?: boolean;
+  /** `add`/`addPreview` only: everything the new instance is declared with. */
+  create?: CreateFields;
 }
+
+/**
+ * The one request that carries values which are not names. Every one of them is
+ * checked here and again by the dispatcher — a domain becomes a Traefik router
+ * rule and a database name becomes SQL, so neither may arrive as free text.
+ */
+export interface CreateFields {
+  app: string;
+  domains: string[];
+  client?: string;
+  database?: string;
+  reuseSecrets?: boolean;
+}
+
+/** Hostnames, lowercase, as `add_instance.py` accepts them. */
+const SAFE_DOMAIN = /^[a-z0-9](?:[a-z0-9.-]{0,251}[a-z0-9])?$/;
+
+/** What MySQL and Postgres both take unquoted. */
+const SAFE_DATABASE = /^[a-z0-9_]{1,64}$/;
+
+/** The dispatcher refuses an eleventh; refused here too, with a better message. */
+const MAX_DOMAINS = 10;
 
 /**
  * Builds the argv for a request.
@@ -172,6 +219,10 @@ export function buildCommand(request: CommandRequest, stackPath: string): string
     argv.push(instance);
   }
 
+  if (request.command === 'add' || request.command === 'addPreview') {
+    return [...argv, ...createFlags(request), ...(request.command === 'addPreview' ? ['--dry-run'] : []), '--json'];
+  }
+
   // Fixed flags, chosen by which entry was asked for rather than passed in.
   // Nothing about the change being written appears here: it goes on stdin.
   if (request.command === 'secrets') return [...argv, '--json'];
@@ -196,6 +247,50 @@ export function buildCommand(request: CommandRequest, stackPath: string): string
   }
 
   return argv;
+}
+
+/**
+ * The declaration flags for `add`, each value matched before it is passed on.
+ *
+ * `--reuse-secrets` is a flag and not a value, and it is the only one: it keeps
+ * an existing secrets file rather than refusing, which is how an instance that
+ * was retired without `--with-data` comes back with its database intact.
+ */
+function createFlags(request: CommandRequest): string[] {
+  const create = request.create;
+  if (!create) throw new Error(`'${request.command}' needs the instance's details`);
+
+  if (!SAFE_NAME.test(create.app)) {
+    throw new Error(`Refusing to build a command for app '${create.app}'`);
+  }
+  if (!Array.isArray(create.domains) || create.domains.length === 0) {
+    throw new Error('An instance needs at least one domain');
+  }
+  if (create.domains.length > MAX_DOMAINS) {
+    throw new Error(`An instance takes at most ${MAX_DOMAINS} domains`);
+  }
+
+  const flags = ['--app', create.app];
+  for (const domain of create.domains) {
+    if (!SAFE_DOMAIN.test(domain)) {
+      throw new Error(`Refusing to build a command for domain '${domain}'`);
+    }
+    flags.push('--domain', domain);
+  }
+  if (create.client) {
+    if (!SAFE_NAME.test(create.client)) {
+      throw new Error(`Refusing to build a command for client '${create.client}'`);
+    }
+    flags.push('--client', create.client);
+  }
+  if (create.database) {
+    if (!SAFE_DATABASE.test(create.database)) {
+      throw new Error(`Refusing to build a command for database '${create.database}'`);
+    }
+    flags.push('--database', create.database);
+  }
+  if (create.reuseSecrets) flags.push('--reuse-secrets');
+  return flags;
 }
 
 /**

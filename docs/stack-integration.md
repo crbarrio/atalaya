@@ -42,6 +42,9 @@ decided already. See *Why not `stack`* in [app.md](app.md).
 - [x] `add` and `retire` rebuild the manifest they changed. `merge_manifest` runs at startup,
       before the declaration is written, so `stack inventory` — which is what atalaya reads — kept
       reporting the old set until some unrelated command happened to run.
+- [x] `add --json` prints only the plan. `psql` narrates what it did — `DO`, `CREATE DATABASE` —
+      and those lines went to stdout in front of the JSON, so the one caller that reads that
+      contract parsed them and got nothing. Moved to stderr, not silenced.
 
 ## The declaration is machine state — 2026-08-30
 
@@ -276,14 +279,29 @@ which is running, and which one a bare `deploy` would pick — that last being t
 change. The JSON rows are collected while that output is produced, so the two cannot disagree.
 
 **`exec` is absent and must stay absent.** `stack exec` is `docker compose exec <svc>
-<command...>` — a remote shell, which is the one thing PLAN.md prohibits outright. `retire` and
-`add` is absent too: creating an instance writes secrets and a database, which is its own decision
-rather than a parameter.
+<command...>` — a remote shell, which is the one thing PLAN.md prohibits outright. `engine` is
+absent too: one unqualified word acts on every instance at once.
 
 `retire` was absent when this was written and is present now, in **both** its forms — including
 `--with-data`, which deletes the volumes, the database and the secrets. Withholding it was taking
 the operator's decision for them. The dispatcher accepts the flag only as the exact second
 argument, so a malformed call cannot become a deletion, and `verify()` asserts that.
+
+`add` was absent too, and is present since 2026-08-30. It is the widest entry here and the only one
+whose arguments are not all names — domains, a client, a database — so it is the one case that
+**parses** its arguments instead of matching a fixed shape: each flag at most once, each value
+against a validator of its own (`valid_domain`, `valid_database`), anything unrecognised refused
+outright. An allowlist that worked by naming what to reject would grow a hole the day `stack` grows
+a flag.
+
+What it may not carry is as important as what it may: `--catalogue` and `--secrets-dir` are real
+`add_instance.py` options, and either would redirect the command at files of the caller's choosing.
+`verify()` asserts six malformed shapes are refused, including both of those.
+
+`--dry-run` is allowed, and is a second allowlist entry rather than a parameter of the first
+(`addPreview`, subcommand `add`) — the same split as `secrets`/`secretsSet`, for the same reason:
+one writes and one does not, so one takes the instance lock and an audit row and the other takes
+neither.
 
 `inventory` deliberately does **not** go through the dispatcher. It still runs directly and
 unprivileged, so the panel keeps reading a server whose dispatcher has not been installed yet —

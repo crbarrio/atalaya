@@ -334,7 +334,8 @@ in [stack-integration.md](stack-integration.md).
 
 Out of scope, each for its own reason: **`exec`** is a remote shell and stays prohibited;
 **`retire`** is destructive and needs a type-the-name gate before it is offered (added 2026-08-30,
-in both its forms — see [app.md](app.md)); **`add`** writes secrets and belongs with Phase 4.
+in both its forms — see [app.md](app.md)); **`add`** writes secrets and belonged with Phase 4
+(added 2026-08-30, see Phase 4.5 below).
 
 Provisioning is **not here**: it was solved in v1 by generating the artifact instead of running
 it, and there is no intention of later "promoting" it to remote execution.
@@ -357,6 +358,27 @@ and Ubuntu's default umask leaves group write on everything `git pull` writes. T
 bounding what could be asked for while the program answering could be replaced. Fixed in three
 places, including a check inside the dispatcher that fails closed; see
 [stack-integration.md](stack-integration.md).
+
+### Phase 4.5 — Creating an instance — Done, 2026-08-30
+
+`stack add` from the panel: the last thing that needed a terminal. Not a phase of its own when
+this was written — it became one once the declaration stopped being a git-tracked file with two
+owners, which is what made creating an instance an ordinary dispatcher entry rather than a fight
+with the repository.
+
+It is the widest entry in the allowlist and the only one carrying values that are not names, so
+its dispatcher case parses its arguments instead of matching a fixed shape: each flag at most
+once, each value against its own validator, anything unrecognised refused. What it may **not**
+carry matters as much as what it may — `--catalogue` and `--secrets-dir` would point `stack` at
+files of the caller's choosing.
+
+Two entries for one command, as with `secrets`: `--dry-run` writes nothing and is a `read`, so the
+panel shows what the server itself worked out — database, user, variables still to fill in —
+before anyone commits to it. What is confirmed is what happens.
+
+**It also fixed a real alert.** A newly declared instance was probed for its certificate before it
+had one, so it alerted through the whole DNS-then-variables-then-deploy sequence. The probe list
+now follows what is *deployed*, not what is declared.
 
 ### ~~Phase 5 — Deploying atalaya~~ — dropped, 2026-08-27
 

@@ -199,6 +199,18 @@
       />
     } @else {
 
+    <div class="flex items-center justify-between">
+      <h2 class="font-jetbrains text-sm uppercase tracking-wide text-on-surface">Instances</h2>
+      <button
+        type="button"
+        (click)="openNewInstance()"
+        class="inline-flex items-center gap-2 rounded-xs border border-outline-variant px-3 py-1.5 font-jetbrains text-[11px] uppercase text-on-surface hover:bg-surface-container-highest"
+      >
+        <span class="material-symbols-outlined text-base leading-none">add</span>
+        New instance
+      </button>
+    </div>
+
     <!-- md and up: the full table. Below that, a stacked card per instance instead — eight columns has no honest narrow-screen layout, only a worse one. -->
     <div class="hidden overflow-x-auto rounded-xs border border-outline-variant md:block">
       <table class="w-full text-left text-sm">

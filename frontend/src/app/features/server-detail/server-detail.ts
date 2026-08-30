@@ -1,6 +1,9 @@
+import { Dialog } from '@angular/cdk/dialog';
 import { DecimalPipe } from '@angular/common';
 import { Component, computed, inject, input, signal } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
+
+import { NewInstance } from '../new-instance/new-instance';
 
 import { MetricsService } from '../../core/services/metrics.service';
 import { RegistrationService } from '../../core/services/registration.service';
@@ -45,6 +48,7 @@ export class ServerDetailPage {
   private readonly metricsService = inject(MetricsService);
   private readonly registrationService = inject(RegistrationService);
   private readonly router = inject(Router);
+  private readonly dialog = inject(Dialog);
 
   // Re-fetches on its own whenever `name()` changes (navigating between
   // servers without leaving this route re-triggers the request).
@@ -157,6 +161,17 @@ export class ServerDetailPage {
   /** Always Overview, not browser history — a bookmarked/refreshed server URL has no in-app history to go back to. */
   protected goBack(): void {
     this.router.navigateByUrl('/overview');
+  }
+
+  /**
+   * The dialog is given the server it was opened from, so there is no second
+   * place to choose one. Reloading on close rather than on success: the backend
+   * refreshes the inventory itself, and a cancelled dialog costs one request.
+   */
+  protected openNewInstance(): void {
+    const dialogRef = this.dialog.open(NewInstance, { data: { server: this.name() } });
+    dialogRef.componentInstance?.closed.subscribe(() => dialogRef.close());
+    dialogRef.closed.subscribe(() => this.detail.reload());
   }
 
   protected engineIcon(service: string): string {

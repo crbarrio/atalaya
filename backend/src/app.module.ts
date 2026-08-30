@@ -10,6 +10,7 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { ChannelsModule } from './channels/channels.module';
 import { IncidentsModule } from './incidents/incidents.module';
+import { InstancesModule } from './instances/instances.module';
 import { InventoryModule } from './inventory/inventory.module';
 import { MonitoringModule } from './monitoring/monitoring.module';
 import { PrismaModule } from './prisma/prisma.module';
@@ -38,6 +39,7 @@ import { WebhooksModule } from './webhooks/webhooks.module';
     SearchModule,
     ActionsModule,
     VariablesModule,
+    InstancesModule,
     CatalogueModule,
     OverviewModule,
     AuditModule,

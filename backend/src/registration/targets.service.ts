@@ -59,8 +59,14 @@ export class TargetsService {
     const dir = await this.targetsDir();
     if (!dir) return;
 
+    // Deployed, not merely declared. A domain exists the moment `stack add`
+    // writes it, but there is nothing behind it until the first deploy and no
+    // certificate until Traefik has asked for one — so probing on declaration
+    // means every new instance alerts for its own missing certificate through
+    // the whole DNS-then-variables-then-deploy sequence. Seen for real.
+    // `version` is null until a deploy succeeds, which is exactly that line.
     const instances = await this.prisma.instance.findMany({
-      where: { enabled: true, server: { enabled: true } },
+      where: { enabled: true, server: { enabled: true }, version: { not: null } },
       select: { name: true, domains: true, server: { select: { name: true } } },
     });
 
