@@ -441,8 +441,28 @@ install_command_dispatcher() {
 set -euo pipefail
 
 STACK="__STACK_BIN__"
+STACK_ROOT="${STACK%/stack}"
 
 die() { printf 'atalaya-stack: %s\n' "$*" >&2; exit 2; }
+
+# The allowlist below bounds what the caller may ASK FOR. It is worth nothing
+# if the caller can rewrite the program that then runs: this execs as an account
+# in the docker group, so a writable `stack` is a path to root.
+#
+# The calling account is in the owner's group so it can READ the manifest, and a
+# umask of 002 — the Ubuntu default — makes every file `git pull` writes group
+# writable. That combination is what this refuses. Checked on every call rather
+# than once at install time, because a pull can undo it at any moment.
+writable_by_others() {
+  [[ -n "$(find "$@" -maxdepth 1 -perm /022 -print -quit 2>/dev/null)" ]]
+}
+
+if writable_by_others "$STACK"; then
+  die "refusing: $STACK can be modified by group or other"
+fi
+if writable_by_others "$STACK_ROOT/scripts" "$STACK_ROOT/scripts"/*.py; then
+  die "refusing: $STACK_ROOT/scripts can be modified by group or other"
+fi
 
 # One shape for every name we pass on. Refused here, before `stack` is reached.
 valid_name() { [[ "$1" =~ ^[a-z0-9][a-z0-9._-]*$ ]]; }
@@ -523,7 +543,50 @@ DISPATCHER
     changed "sudoers rule written: ${ATALAYA_USER} may run the dispatcher as ${STACK_OWNER}"
   fi
 
+  harden_stack_tree
+
   ok "atalaya can run a fixed list of stack subcommands, and nothing else"
+}
+
+# The atalaya account is in the owner's group so it can read the manifest. With
+# Ubuntu's default umask of 002 every file `git pull` writes is group writable,
+# so that read access silently came with WRITE access to `stack` itself — and
+# the dispatcher execs it as an account in the docker group. The allowlist was
+# bounding what could be asked for while the program answering could be replaced.
+#
+# Read stays, write goes. The dispatcher refuses to run either way, so a later
+# pull re-introducing the bit fails closed rather than reopening this.
+harden_stack_tree() {
+  step "stack tree permissions"
+
+  # `.git` is included, not skipped. A writable .git/hooks is the same hole by a
+  # slower route: a post-merge hook dropped there runs as the owner on the next
+  # pull.
+  local writable
+  writable="$(find "$STACK_DIR" -perm /022 -print 2>/dev/null | wc -l)"
+
+  if [[ "$writable" -gt 0 ]]; then
+    find "$STACK_DIR" -perm /022 -exec chmod go-w {} + 2>/dev/null || true
+    changed "removed group/other write from $writable path(s) under $STACK_DIR"
+  else
+    info "nothing in $STACK_DIR is writable by group or other"
+  fi
+
+  # A pull as the owner puts every bit straight back, because Ubuntu gives an
+  # account whose group matches its name a umask of 002.
+  #
+  # Prepended, not appended: the stock ~/.bashrc returns in its first lines when
+  # the shell is not interactive, and `ssh <host> '<command>'` — which is how
+  # this repository actually gets updated — is not interactive. A line at the
+  # end is never reached.
+  local rc="/home/${STACK_OWNER}/.bashrc"
+  local marker='umask 022 # atalaya: keeps git pull from making stack group-writable'
+  if [[ -f "$rc" ]] && ! grep -qF "$marker" "$rc"; then
+    printf '%s\n%s' "$marker" "$(cat "$rc")" > "$rc.atalaya" \
+      && mv "$rc.atalaya" "$rc" \
+      && chown "${STACK_OWNER}:${STACK_GROUP}" "$rc"
+    changed "set umask 022 for ${STACK_OWNER}, ahead of the non-interactive guard"
+  fi
 }
 
 # --- Verification ----------------------------------------------------------
@@ -640,6 +703,15 @@ verify() {
         failures=$((failures + 1))
       else
         refused=$((refused + 1))
+      fi
+
+      # The allowlist only means something while the program it guards cannot be
+      # replaced by the account it guards against.
+      if sudo -u "$ATALAYA_USER" test -w "$STACK_DIR/stack"; then
+        fail "$ATALAYA_USER CAN WRITE $STACK_DIR/stack — it could replace what the dispatcher runs"
+        failures=$((failures + 1))
+      else
+        ok "$ATALAYA_USER cannot modify what the dispatcher runs"
       fi
       ok "the dispatcher refused $refused disallowed calls"
     elif sudo -n -l -U "$ATALAYA_USER" 2>&1 | grep -q 'not allowed'; then
