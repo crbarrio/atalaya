@@ -343,10 +343,23 @@ An editor for `secrets/<instance>.env` with the schema derived from `services[].
 `apps.json`: which variables the app requires, which are missing, which are set. Write-only,
 preserving 600 permissions.
 
-### Phase 5 — Deploying atalaya
+### ~~Phase 5 — Deploying atalaya~~ — dropped, 2026-08-27
 
-Add `atalaya` to `stack`'s catalogue and deploy it as one more instance on the home server.
-Closes the circle and avoids a separate deployment mechanism for this one app.
+The plan was to add `atalaya` to `stack`'s catalogue and run it as one more instance, to avoid a
+separate deployment mechanism for this one app. Dropped, for reasons that were already on the
+page before this became a phase to schedule:
+
+- **The identity models conflict.** atalaya is a loopback-bound process reading a header
+  `tailscale serve` injects; `stack` reaches instances only through Traefik by domain. Putting
+  atalaya behind `stack` reintroduces the container-cannot-reach-host-loopback problem
+  `network_mode: host` exists to solve, and trades a tailnet-only identity for a public-domain
+  one. See *Why not `stack`* in [app.md](app.md), which argued this before Phase 5 was revisited.
+- **The mechanism it would replace is barely a mechanism.** Deploying atalaya is `git clone`,
+  edit one file of two values, and three compose commands. That was true only after the install
+  rework in Phase 2.6; the "separate deployment mechanism" this phase was written against — a
+  scratch clone, a build, and a directory swap — no longer exists.
+- **It would have atalaya deploy itself.** The audit row is written on completion, so the one
+  action guaranteed to restart the process mid-run is the one that would never be recorded.
 
 ## Changes to the `stack` repo
 
