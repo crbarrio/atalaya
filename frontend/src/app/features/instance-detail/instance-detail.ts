@@ -157,6 +157,100 @@ export class InstanceDetailPage {
     this.run('start');
   }
 
+  // ── Retiring ──────────────────────────────────────────────────────────────
+
+  /**
+   * Retiring is the one action with no undo button on this page, so it is the
+   * one action that is not a click away from the others: it lives in its own
+   * danger zone and asks for the instance name to be typed.
+   *
+   * That gate is not caution for its own sake. Building the server page's
+   * danger zone deregistered the real test server by accident, because two
+   * clicks land on "Deregister" then "Yes, deregister" in roughly the same
+   * screen position. A name that has to be typed cannot be reached that way.
+   */
+  protected readonly confirmingRetire = signal(false);
+  protected readonly retireTyped = signal('');
+
+  /**
+   * Whether the data goes too. Two commands, not a flag on one: the server
+   * allowlists them separately and the audit trail names which was run.
+   */
+  protected readonly retireWithData = signal(false);
+
+  /**
+   * The second gate, and only for the destructive form. Typing the name proves
+   * you meant this instance; this proves you meant the data as well, which is
+   * the part that `stack add --reuse-secrets` cannot give back.
+   */
+  protected readonly dataUnderstood = signal(false);
+
+  protected readonly retireArmed = computed(
+    () =>
+      this.retireTyped() === this.instance() && (!this.retireWithData() || this.dataUnderstood()),
+  );
+
+  /**
+   * What the destructive form destroys, named rather than described.
+   *
+   * `volumes: null` means no backup has ever measured them — not that there are
+   * none. Collapsing the two would have this screen promise nothing will be
+   * deleted while `docker volume rm` is about to run, which is the one thing a
+   * confirmation like this must never do.
+   */
+  protected readonly doomed = computed(() => {
+    const instance = this.found();
+    return {
+      volumes: instance?.volumes ?? [],
+      volumesKnown: instance?.volumes != null,
+      database: instance?.database?.name ?? null,
+    };
+  });
+
+  protected startRetire(): void {
+    this.confirming.set(null);
+    this.retireTyped.set('');
+    this.retireWithData.set(false);
+    this.dataUnderstood.set(false);
+    this.confirmingRetire.set(true);
+  }
+
+  protected cancelRetire(): void {
+    this.confirmingRetire.set(false);
+    this.retireTyped.set('');
+    this.retireWithData.set(false);
+    this.dataUnderstood.set(false);
+  }
+
+  /** Switching between the two forms clears the acknowledgement, never inherits it. */
+  protected chooseRetire(withData: boolean): void {
+    this.retireWithData.set(withData);
+    this.dataUnderstood.set(false);
+  }
+
+  protected retire(): void {
+    if (!this.retireArmed()) return;
+    const command: ActionCommand = this.retireWithData() ? 'retireWithData' : 'retire';
+    this.confirmingRetire.set(false);
+    this.runner.start(this.name(), command, { instance: this.instance() });
+    this.leaveWhenRetired();
+  }
+
+  /**
+   * The instance stops existing, so this page stops having anything to show.
+   * The inventory cache is re-read first — otherwise the server page would
+   * still list the instance that was just removed.
+   */
+  private leaveWhenRetired(): void {
+    const check = setInterval(() => {
+      if (this.runner.state() === 'running') return;
+      clearInterval(check);
+      if (this.runner.exitCode() !== 0) return; // Leave the output on screen to be read.
+      void this.serversService.refresh(this.name()).finally(() => this.goBack());
+    }, 1000);
+    this.destroyRef.onDestroy(() => clearInterval(check));
+  }
+
   protected showLogs(): void {
     this.confirming.set(null);
     this.runner.start(this.name(), 'logs', { instance: this.instance() });

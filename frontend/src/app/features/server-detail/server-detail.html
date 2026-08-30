@@ -97,7 +97,7 @@
       }
     </div>
 
-    @if (metrics.value(); as m) {
+    @if (metricsSafe(); as m) {
       <section class="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <app-usage-bar
           icon="memory"

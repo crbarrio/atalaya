@@ -264,7 +264,7 @@ export class ActionsService {
   private entry(serverName: string, request: CommandRequest, actor: string) {
     return {
       actor,
-      action: `stack ${request.command}`,
+      action: `stack ${COMMANDS[request.command].label ?? request.command}`,
       target: `${serverName}/${request.argument ?? ''}`.replace(/\/$/, ''),
       detail: { command: request.command, argument: request.argument, version: request.version },
     };

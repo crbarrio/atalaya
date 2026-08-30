@@ -32,6 +32,8 @@ export type CommandName =
   | 'start'
   | 'stop'
   | 'backup'
+  | 'retire'
+  | 'retireWithData'
   | 'secrets'
   | 'secretsSet';
 
@@ -54,6 +56,12 @@ export interface CommandSpec {
    * one of them is a `read` and the other a `mutate`.
    */
   subcommand?: string;
+  /**
+   * How the audit trail names it, when the key is an internal name rather than
+   * what ran. `retireWithData` is this file's word for `retire --with-data`,
+   * and the record of a deletion should say what was actually run.
+   */
+  label?: string;
 }
 
 export const COMMANDS: Record<CommandName, CommandSpec> = {
@@ -76,6 +84,25 @@ export const COMMANDS: Record<CommandName, CommandSpec> = {
   stop: { kind: 'mutate', streams: true, timeoutMs: 5 * 60_000, needsInstance: true },
   // Streams whole volumes to remote storage; on a large instance this is hours.
   backup: { kind: 'mutate', streams: true, timeoutMs: 4 * 60 * 60_000, needsInstance: false },
+
+  // Takes an instance out of service. Both run a full backup first and refuse
+  // if it fails, so the timeout is the backup's, not a lifecycle command's.
+  //
+  // Two entries rather than one flag, for the reason `secrets`/`secretsSet` are
+  // two: the allowlisted name is what is granted, and the audit row then reads
+  // `stack retire` or `stack retire --with-data` without anything having to
+  // parse arguments back out to tell which one happened.
+  retire: { kind: 'mutate', streams: true, timeoutMs: 4 * 60 * 60_000, needsInstance: true },
+  // Deletes the volumes, the database and the secrets. Nothing undoes this;
+  // `retire` alone is undone with `stack add --reuse-secrets`.
+  retireWithData: {
+    kind: 'mutate',
+    streams: true,
+    timeoutMs: 4 * 60 * 60_000,
+    needsInstance: true,
+    subcommand: 'retire',
+    label: 'retire --with-data',
+  },
 
   // Which variables an instance declares and which are set. Never a value.
   secrets: {
@@ -149,6 +176,7 @@ export function buildCommand(request: CommandRequest, stackPath: string): string
   // Nothing about the change being written appears here: it goes on stdin.
   if (request.command === 'secrets') return [...argv, '--json'];
   if (request.command === 'secretsSet') return [...argv, '--set'];
+  if (request.command === 'retireWithData') return [...argv, '--with-data'];
 
   if (request.version !== undefined) {
     if (request.command !== 'deploy') {

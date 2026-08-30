@@ -61,6 +61,17 @@ export class ServerDetailPage {
   protected readonly historyValue = computed(() => valueOr(this.history, undefined));
   protected readonly containersValue = computed(() => valueOr(this.hostContainers, []));
 
+  /**
+   * Everything below reads metrics through this, never `metrics.value()`.
+   *
+   * Reading `.value()` on an errored resource throws, and a throw during change
+   * detection takes the whole view down — so with Prometheus unreachable this
+   * page went blank rather than showing the server without its numbers. Its
+   * neighbours were guarded when that was found on the instance page; this one
+   * was missed, and only showed up on being sent here by a retire.
+   */
+  protected readonly metricsSafe = computed(() => valueOr(this.metrics, undefined));
+
   protected readonly historyHours = signal(24);
   protected readonly historyRanges = [
     { label: '24h', hours: 24 },
@@ -69,8 +80,8 @@ export class ServerDetailPage {
   ];
   protected readonly history = this.metricsService.history(this.name, this.historyHours);
 
-  protected readonly cpuPercent = computed(() => this.metrics.value()?.server.cpu.percent ?? null);
-  protected readonly memoryPercent = computed(() => usagePercent(this.metrics.value()?.server.memory));
+  protected readonly cpuPercent = computed(() => this.metricsSafe()?.server.cpu.percent ?? null);
+  protected readonly memoryPercent = computed(() => usagePercent(this.metricsSafe()?.server.memory));
 
   protected readonly diskPreferences = this.metricsService.diskPreferences(this.name);
 
@@ -81,7 +92,7 @@ export class ServerDetailPage {
    */
   protected readonly disks = computed(() => {
     const preferences = new Map(valueOr(this.diskPreferences, []).map((p) => [p.mountpoint, p]));
-    return (this.metrics.value()?.server.disks ?? []).map((disk) => ({
+    return (this.metricsSafe()?.server.disks ?? []).map((disk) => ({
       ...disk,
       percent: usagePercent(disk),
       trendAlerts: preferences.get(disk.mountpoint)?.trendAlerts ?? true,
@@ -100,30 +111,30 @@ export class ServerDetailPage {
 
   /** Instance memory/CPU, keyed by name, so the table can look them up per row without re-scanning. */
   protected readonly instanceUsage = computed(
-    () => new Map(this.metrics.value()?.instances.map((i) => [i.name, i]) ?? []),
+    () => new Map(this.metricsSafe()?.instances.map((i) => [i.name, i]) ?? []),
   );
 
-  protected readonly memoryDaysRemaining = computed(() => this.metrics.value()?.server.memory.daysRemaining ?? null);
+  protected readonly memoryDaysRemaining = computed(() => this.metricsSafe()?.server.memory.daysRemaining ?? null);
 
   /** Duration of the mode SSH last recorded a status for — the two sources describe the same run. */
   protected readonly backupDuration = computed(() => {
     const mode = this.server()?.backup.mode;
-    const seconds = this.metrics.value()?.backup.find((d) => d.mode === mode)?.seconds;
+    const seconds = this.metricsSafe()?.backup.find((d) => d.mode === mode)?.seconds;
     return seconds !== undefined ? formatDuration(seconds) : null;
   });
 
-  protected readonly alerts = computed(() => this.metrics.value()?.alerts ?? []);
+  protected readonly alerts = computed(() => this.metricsSafe()?.alerts ?? []);
 
   protected readonly uptime = computed(() => {
-    const seconds = this.metrics.value()?.server.uptime.seconds;
+    const seconds = this.metricsSafe()?.server.uptime.seconds;
     return seconds !== undefined && seconds !== null ? formatUptime(seconds) : null;
   });
 
-  protected readonly load = computed(() => formatLoad(this.metrics.value()?.server.load));
+  protected readonly load = computed(() => formatLoad(this.metricsSafe()?.server.load));
 
   /** Collectors Prometheus cannot currently scrape — a pipeline problem, distinct from SSH reachability. */
   protected readonly downCollectors = computed(() => {
-    const scrape = this.metrics.value()?.server.scrape;
+    const scrape = this.metricsSafe()?.server.scrape;
     if (!scrape) return [];
     const down: string[] = [];
     if (scrape.node === false) down.push('node_exporter');
@@ -133,7 +144,7 @@ export class ServerDetailPage {
 
   /** traefik/mysql/postgres — one per server, shown apart from the instance table, in mount order. */
   protected readonly engine = computed(() => {
-    const byService = new Map(this.metrics.value()?.engine.map((e) => [e.service, e]) ?? []);
+    const byService = new Map(this.metricsSafe()?.engine.map((e) => [e.service, e]) ?? []);
     return ENGINE_ORDER.map((service) => byService.get(service)).filter((e) => e !== undefined);
   });
 

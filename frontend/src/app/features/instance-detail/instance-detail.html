@@ -266,6 +266,159 @@
         [instance]="instance.name"
         (apply)="applyVariables()"
       />
+
+      <!-- Its own zone, away from the action toolbar: retiring is the one thing
+           on this page with no button that undoes it. -->
+      <div class="flex flex-col gap-3 rounded-xs border border-error/30 bg-error/5 p-4">
+        <h2 class="font-jetbrains text-error text-sm uppercase tracking-wide">Danger zone</h2>
+
+        @if (!confirmingRetire()) {
+          <div class="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+            <p class="text-on-surface-variant text-xs">
+              Takes '{{ instance.name }}' out of service: containers, routing and its entry on the
+              server. Whether its data goes too is chosen at the next step.
+            </p>
+            <button
+              type="button"
+              (click)="startRetire()"
+              class="shrink-0 rounded-xs border border-error/40 px-3 py-1.5 font-jetbrains text-[11px] uppercase text-error hover:bg-error/10"
+            >
+              Retire
+            </button>
+          </div>
+        } @else {
+          <div class="flex flex-col gap-3">
+            <p class="text-error text-xs">
+              Retire <span class="font-jetbrains">{{ instance.name }}</span> from
+              <span class="font-jetbrains">{{ name() }}</span>?
+            </p>
+
+            <p class="text-on-surface-variant text-xs">
+              A full backup runs first, and nothing is retired if it fails. Then its domains stop
+              answering and it leaves the server's instance list.
+            </p>
+
+            <!-- The two forms as a choice, not two buttons that differ by one
+                 word. One is undoable and the other is not, which is the whole
+                 decision being made here. -->
+            <div class="flex flex-col gap-2">
+              <label class="flex cursor-pointer items-start gap-3 rounded-xs border p-3"
+                     [class]="!retireWithData() ? 'border-primary/50 bg-primary/5' : 'border-outline-variant'">
+                <input
+                  type="radio"
+                  name="retire-form"
+                  class="mt-0.5 accent-primary"
+                  [checked]="!retireWithData()"
+                  (change)="chooseRetire(false)"
+                />
+                <span class="flex flex-col gap-0.5 text-xs">
+                  <span class="text-on-surface">Keep the data</span>
+                  <span class="text-on-surface-variant">
+                    Volumes, database and secrets stay on the server.
+                    <code class="text-on-surface">stack add --reuse-secrets</code> puts the instance
+                    back exactly as it was.
+                  </span>
+                </span>
+              </label>
+
+              <label class="flex cursor-pointer items-start gap-3 rounded-xs border p-3"
+                     [class]="retireWithData() ? 'border-error/50 bg-error/10' : 'border-outline-variant'">
+                <input
+                  type="radio"
+                  name="retire-form"
+                  class="mt-0.5 accent-primary"
+                  [checked]="retireWithData()"
+                  (change)="chooseRetire(true)"
+                />
+                <span class="flex flex-col gap-0.5 text-xs">
+                  <span class="text-error">Delete the data too</span>
+                  <span class="text-on-surface-variant">
+                    Permanent. Only the backup taken moments earlier will hold a copy.
+                  </span>
+                </span>
+              </label>
+            </div>
+
+            @if (retireWithData()) {
+              <div class="flex flex-col gap-2 rounded-xs border border-error/40 bg-error/5 p-3 text-xs">
+                <span class="text-on-surface">This deletes, permanently:</span>
+                <ul class="flex flex-col gap-0.5">
+                  @for (volume of doomed().volumes; track volume.name) {
+                    <li>
+                      <span class="font-jetbrains text-on-surface">{{ volume.name }}</span>
+                      <span class="text-on-surface-variant">— volume, {{ volume.sizeBytes | bytes }}</span>
+                    </li>
+                  } @empty {
+                    @if (doomed().volumesKnown) {
+                      <li class="text-on-surface-variant">No named volumes.</li>
+                    } @else {
+                      <li class="text-tertiary">
+                        Every volume of this instance — no backup has measured them yet, so they
+                        cannot be listed here.
+                      </li>
+                    }
+                  }
+                  @if (doomed().database) {
+                    <li>
+                      <span class="font-jetbrains text-on-surface">{{ doomed().database }}</span>
+                      <span class="text-on-surface-variant">— database, dropped</span>
+                    </li>
+                  }
+                  <li>
+                    <span class="font-jetbrains text-on-surface">secrets/{{ instance.name }}.env</span>
+                    <span class="text-on-surface-variant">— its variables</span>
+                  </li>
+                </ul>
+
+                <label class="mt-1 flex cursor-pointer items-start gap-2">
+                  <input
+                    type="checkbox"
+                    class="mt-0.5 accent-error"
+                    [checked]="dataUnderstood()"
+                    (change)="dataUnderstood.set($any($event.target).checked)"
+                  />
+                  <span class="text-on-surface">
+                    I understand this cannot be undone from the panel or from a terminal.
+                  </span>
+                </label>
+              </div>
+            }
+
+            <label class="flex flex-col gap-1">
+              <span class="text-on-surface-variant text-[11px]">
+                Type <span class="font-jetbrains text-on-surface">{{ instance.name }}</span> to confirm
+              </span>
+              <input
+                type="text"
+                autocomplete="off"
+                spellcheck="false"
+                [value]="retireTyped()"
+                (input)="retireTyped.set($any($event.target).value)"
+                (keydown.escape)="cancelRetire()"
+                class="rounded-xs border border-outline-variant bg-surface-container-lowest px-2 py-1.5 font-jetbrains text-[11px] text-on-surface sm:max-w-xs"
+              />
+            </label>
+
+            <div class="flex items-center justify-end gap-2">
+              <button
+                type="button"
+                (click)="cancelRetire()"
+                class="rounded-xs border border-outline-variant px-3 py-1.5 font-jetbrains text-[11px] uppercase text-on-surface hover:bg-surface-container-highest"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                [disabled]="!retireArmed()"
+                (click)="retire()"
+                class="rounded-xs bg-error px-3 py-1.5 font-jetbrains text-[11px] uppercase text-on-error disabled:opacity-40"
+              >
+                {{ retireWithData() ? 'Retire and delete' : 'Retire' }} {{ instance.name }}
+              </button>
+            </div>
+          </div>
+        }
+      </div>
     </div>
 
     <p class="text-on-surface-variant text-xs">Read {{ instance.fetchedAt | relativeTime }}</p>

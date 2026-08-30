@@ -1,5 +1,6 @@
-import { Injectable, Signal } from '@angular/core';
-import { httpResource, HttpResourceRef } from '@angular/common/http';
+import { HttpClient, httpResource, HttpResourceRef } from '@angular/common/http';
+import { Injectable, Signal, inject } from '@angular/core';
+import { firstValueFrom } from 'rxjs';
 
 import { API_BASE } from '../http/api.config';
 import { ServerDetail } from '../models/instance.model';
@@ -41,4 +42,16 @@ export class ServersService {
     pollResource(resource);
     return resource;
   }
+
+  /**
+   * Re-reads one server's inventory over SSH, rather than waiting for the
+   * scheduled refresh. Needed after an action that adds or removes an
+   * instance: the cached `Instance` rows would otherwise still list one that
+   * no longer exists.
+   */
+  refresh(name: string): Promise<unknown> {
+    return firstValueFrom(this.http.post(`${API_BASE}/servers/${name}/refresh`, {}));
+  }
+
+  private readonly http = inject(HttpClient);
 }

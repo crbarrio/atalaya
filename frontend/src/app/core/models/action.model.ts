@@ -11,7 +11,9 @@ export type ActionCommand =
   | 'rollback'
   | 'start'
   | 'stop'
-  | 'backup';
+  | 'backup'
+  | 'retire'
+  | 'retireWithData';
 
 /** One line as the console shows it, already split and stripped of ANSI. */
 export interface ConsoleLine {

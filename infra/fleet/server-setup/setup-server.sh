@@ -212,17 +212,30 @@ install_node_exporter() {
   # discards its output the metric would simply never appear — the exact silent
   # failure the metric exists to report.
   #
+  # Written by its OWNER, not by its group. Group write would also hand it to
+  # the atalaya account, which is in $STACK_GROUP so it can read the manifest —
+  # and these files are what says whether the backup ran and which version is
+  # deployed. Nothing here is executed, so it is not a way to root; it is a way
+  # to make the monitoring agree with whoever forged it, which is worse for the
+  # one job the monitoring has.
+  #
+  # root still writes here regardless: the distro's own collectors (apt, smartmon)
+  # drop their files in the same directory.
+  #
   # setgid so files created here keep the group, whoever writes them.
   mkdir -p "$TEXTFILE_DIR"
-  local want_group="$STACK_GROUP" now_group now_mode
+  local now_owner now_group now_mode
+  now_owner="$(stat -c %U "$TEXTFILE_DIR")"
   now_group="$(stat -c %G "$TEXTFILE_DIR")"
   now_mode="$(stat -c %a "$TEXTFILE_DIR")"
-  if [[ "$now_group" != "$want_group" || "$now_mode" != "2775" ]]; then
-    chgrp "$want_group" "$TEXTFILE_DIR"
-    chmod 2775 "$TEXTFILE_DIR"
-    changed "$TEXTFILE_DIR now writable by group $want_group"
+  if [[ "$now_owner" != "$STACK_OWNER" || "$now_group" != "$STACK_GROUP" || "$now_mode" != "2755" ]]; then
+    chown "${STACK_OWNER}:${STACK_GROUP}" "$TEXTFILE_DIR"
+    chmod 2755 "$TEXTFILE_DIR"
+    # Files already there may carry the old group write.
+    find "$TEXTFILE_DIR" -maxdepth 1 -type f -perm /022 -exec chmod go-w {} + 2>/dev/null || true
+    changed "$TEXTFILE_DIR now written by $STACK_OWNER alone, not by its group"
   else
-    info "$TEXTFILE_DIR already writable by group $want_group"
+    info "$TEXTFILE_DIR already writable only by $STACK_OWNER"
   fi
 
   local args
@@ -409,9 +422,15 @@ setup_atalaya_user() {
 # write, rather than in sudoers globs or in the panel's own code.
 #
 # `exec` is absent on purpose and must stay absent: `stack exec` is
-# `docker compose exec <svc> <command...>`, which is a remote shell. `retire`
-# and `add` are absent because they are destructive and instance-creating
-# respectively; both are separate decisions, not a parameter.
+# `docker compose exec <svc> <command...>`, which is a remote shell. `add` is
+# absent because creating an instance writes secrets and a database, which is
+# its own decision rather than a parameter.
+#
+# `retire` is present in both its forms, including `--with-data`, which deletes
+# the volumes, the database and the secrets. That is the operator's decision to
+# take, not one to hide behind a missing option — what this file does is make
+# sure it can only be asked for explicitly, never as a side effect of a
+# malformed argument.
 #
 # `secrets` is how the panel reaches secrets/ despite the account not being able
 # to open it — through this program, as the owner, and only in the two shapes
@@ -446,6 +465,17 @@ install_command_dispatcher() {
 
 set -euo pipefail
 
+# Everything `stack` writes while running from here must not come out writable
+# by the calling account. `sudo` does not read the owner's shell files, so the
+# umask here is the system default of 002, and a deploy driven from the panel
+# was leaving its own apps/<app>/docker-compose.yml group writable — a file the
+# panel could then rewrite and ask this same program to `start`, and a compose
+# file can bind-mount / into a container.
+#
+# Set here rather than in ~/.bashrc, which sudo never reads, or in `stack`,
+# which would put the rule somewhere the rule is meant to protect.
+umask 022
+
 STACK="__STACK_BIN__"
 STACK_ROOT="${STACK%/stack}"
 
@@ -468,6 +498,12 @@ if writable_by_others "$STACK"; then
 fi
 if writable_by_others "$STACK_ROOT/scripts" "$STACK_ROOT/scripts"/*.py; then
   die "refusing: $STACK_ROOT/scripts can be modified by group or other"
+fi
+# The compose files count as things this runs. A compose file can bind-mount /
+# into a container, so being able to write one is the same as being able to
+# write `stack`. Cheap to walk: one directory per instance.
+if [[ -d "$STACK_ROOT/apps" ]] && [[ -n "$(find "$STACK_ROOT/apps" -perm /022 -print -quit 2>/dev/null)" ]]; then
+  die "refusing: something under $STACK_ROOT/apps can be modified by group or other"
 fi
 
 # One shape for every name we pass on. Refused here, before `stack` is reached.
@@ -507,6 +543,16 @@ case "$subcommand" in
     [[ "${1:-}" == "full" || "${1:-}" == "incremental" ]] \
       || die "backup takes 'full' or 'incremental'"
     [[ $# -eq 1 ]] || die "backup takes no further arguments"
+    ;;
+  retire)
+    [[ $# -ge 1 ]] || die "retire needs an instance"
+    valid_name "$1" || die "bad instance name"
+    # Two forms, and only two. Without the flag the volumes, database and
+    # secrets survive and `stack add --reuse-secrets` undoes it; with it they
+    # are gone and nothing does. So the flag is never implied and is accepted
+    # nowhere but as the second argument — the panel asks for it by name.
+    [[ $# -eq 1 || ($# -eq 2 && "$2" == "--with-data") ]] \
+      || die "retire takes an instance and optionally --with-data"
     ;;
   secrets)
     # The only entry carrying operator input, and it never arrives here: --set
@@ -636,6 +682,17 @@ verify() {
       fail "$STACK_OWNER cannot write to $TEXTFILE_DIR: stack's metrics would fail silently"
       failures=$((failures + 1))
     fi
+
+    # And the account the panel connects with must not: these files are what
+    # says whether the backup ran, so forging them silences the alert.
+    if [[ -n $ATALAYA_KEY ]] && id "$ATALAYA_USER" >/dev/null 2>&1; then
+      if sudo -u "$ATALAYA_USER" test -w "$TEXTFILE_DIR"; then
+        fail "$ATALAYA_USER CAN WRITE $TEXTFILE_DIR — it could forge the backup and version metrics"
+        failures=$((failures + 1))
+      else
+        ok "$ATALAYA_USER cannot forge the metrics"
+      fi
+    fi
   fi
 
   url="http://${TAILNET_IP}:${CADVISOR_PORT}/metrics"
@@ -703,9 +760,9 @@ verify() {
       fi
 
       # The refusals are the point of the dispatcher, so they are asserted, not
-      # assumed. `exec` would be a remote shell; `retire` deletes an instance.
+      # assumed. `exec` would be a remote shell; `add` writes secrets.
       local refused=0 forbidden
-      for forbidden in exec retire add engine; do
+      for forbidden in exec add engine; do
         if sudo -n -u "$STACK_OWNER" /usr/local/sbin/atalaya-stack "$forbidden" x 2>/dev/null; then
           fail "the dispatcher ACCEPTED '$forbidden' — it must not"
           failures=$((failures + 1))
@@ -721,9 +778,16 @@ verify() {
       fi
 
       # The allowlist only means something while the program it guards cannot be
-      # replaced by the account it guards against.
-      if sudo -u "$ATALAYA_USER" test -w "$STACK_DIR/stack"; then
-        fail "$ATALAYA_USER CAN WRITE $STACK_DIR/stack — it could replace what the dispatcher runs"
+      # replaced by the account it guards against. Two surfaces, not one: the
+      # program itself, and the compose files it hands to docker — those can
+      # bind-mount / into a container, so writing one is equivalent to writing
+      # `stack`.
+      local writable_targets
+      writable_targets="$(find "$STACK_DIR/stack" "$STACK_DIR/scripts" "$STACK_DIR/apps" \
+        -perm /022 -print 2>/dev/null | head -5)"
+      if [[ -n "$writable_targets" ]]; then
+        fail "$ATALAYA_USER CAN WRITE what the dispatcher runs:"
+        printf '      %s\n' $writable_targets >&2
         failures=$((failures + 1))
       else
         ok "$ATALAYA_USER cannot modify what the dispatcher runs"
@@ -737,6 +801,21 @@ verify() {
       else
         refused=$((refused + 1))
       fi
+
+      # `--with-data` is allowed, so what is asserted is that it can only be
+      # asked for exactly: never in first position, never with anything after
+      # it, never alongside another flag. A malformed argument must not become
+      # a data deletion.
+      local bad
+      for bad in "--with-data x" "x --with-data extra" "x --with-data --force" "x --force"; do
+        # shellcheck disable=SC2086
+        if sudo -n -u "$STACK_OWNER" /usr/local/sbin/atalaya-stack retire $bad 2>/dev/null; then
+          fail "the dispatcher ACCEPTED 'retire $bad'"
+          failures=$((failures + 1))
+        else
+          refused=$((refused + 1))
+        fi
+      done
       ok "the dispatcher refused $refused disallowed calls"
     elif sudo -n -l -U "$ATALAYA_USER" 2>&1 | grep -q 'not allowed'; then
       info "$ATALAYA_USER has no sudo and no dispatcher: reads only, no actions"
