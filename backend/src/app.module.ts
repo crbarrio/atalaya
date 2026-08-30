@@ -3,6 +3,8 @@ import { APP_GUARD } from '@nestjs/core';
 import { ScheduleModule } from '@nestjs/schedule';
 
 import { AuditModule } from './shared/audit/audit.module';
+import { OverviewModule } from './overview/overview.module';
+import { CatalogueModule } from './catalogue/catalogue.module';
 import { ActionsModule } from './actions/actions.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -34,6 +36,8 @@ import { WebhooksModule } from './webhooks/webhooks.module';
     ChannelsModule,
     SearchModule,
     ActionsModule,
+    CatalogueModule,
+    OverviewModule,
     AuditModule,
   ],
   controllers: [AppController],

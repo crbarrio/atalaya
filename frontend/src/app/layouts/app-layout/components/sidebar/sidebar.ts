@@ -19,6 +19,7 @@ export class Sidebar {
   readonly sections = [
     { path: '/overview', label: 'Overview', icon: 'dashboard' },
     { path: '/servers', label: 'Servers', icon: 'dns' },
+    { path: '/apps', label: 'Applications', icon: 'apps' },
     { path: '/backups', label: 'Backups', icon: 'backup' },
     { path: '/incidents', label: 'Incidents', icon: 'warning' },
   ];

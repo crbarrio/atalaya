@@ -17,7 +17,13 @@ export const routes: Routes = [
         path: 'servers',
         pathMatch: 'full',
         title: 'Servers',
-        loadComponent: () => import('./features/overview/overview').then((m) => m.Overview),
+        loadComponent: () => import('./features/servers/servers').then((m) => m.Servers),
+      },
+      {
+        path: 'apps',
+        pathMatch: 'full',
+        title: 'Applications',
+        loadComponent: () => import('./features/apps/apps').then((m) => m.Apps),
       },
       {
         path: 'servers/:name',

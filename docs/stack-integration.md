@@ -14,17 +14,8 @@ Everything atalaya needs from `stack`, and the changes made there. The repo itse
 - [ ] A dispatcher entry for writing one. The first that carries operator input rather than a
       name from a closed list, so its validation matters more than the others'.
 
-**Phase 5 — atalaya as a `stack` instance.** Adding it to the catalogue closes the circle and
-drops the one bespoke deployment path. Not obviously right, and worth deciding before building:
-
-- [ ] Resolve the conflict [PLAN.md](PLAN.md) already records — atalaya's identity model is
-      `tailscale serve` injecting a header into a loopback-bound process, while `stack` reaches
-      instances only through Traefik by domain. Putting atalaya behind `stack` reintroduces the
-      container-cannot-reach-host-loopback problem `network_mode: host` exists to solve.
-- [ ] Decide what happens when atalaya deploys itself and the container restarts mid-action: the
-      audit row is written on completion, so it would be lost.
-- [ ] Weigh it against what replaced the old flow: install is already `git clone` plus three
-      compose commands, so the bespoke path this phase removes is no longer very bespoke.
+Deploying atalaya itself is **not** pending: it is a clone and three compose commands, decided
+already. See *Why not `stack`* in [app.md](app.md).
 
 ## Done
 
@@ -48,6 +39,8 @@ drops the one bespoke deployment path. Not obviously right, and worth deciding b
       `inventory.py` reads back. It is the one place with docker access that already walks every
       volume; the reading account has none.
 - [x] Running `stack` from atalaya, through a dispatcher. See below.
+- [x] `stack catalogue` — what each application *is*, as JSON. Like `inventory`, it needs
+      neither docker nor `.env`, so it runs unprivileged and needs no dispatcher entry. See below.
 - [x] `stack versions --json`, so the panel can report which versions exist and which one a bare
       `deploy` would pick without parsing prose. See the dispatcher section below.
 - [x] `MIGRATION.md` deleted: all three servers were migrated to the renamed layout and nothing
@@ -123,6 +116,27 @@ That second point splits the data sources cleanly, and the split is the right on
 
 atalaya already has the metrics engine; liveness is a question for it. Asking SSH would have meant
 either lying or handing the panel the docker socket.
+
+## `stack catalogue` — 2026-08-30
+
+`inventory` answers "what does this machine run". This answers the other half: what each
+application *is* — description, repo, database engine, services with their images, volumes and
+declared variables. That lives in `apps.json`, which reaches every server from the same git
+repo, so it is fleet-wide information that happens to sit on each machine.
+
+Reading `apps.json` needs neither docker nor `.env`, so like `inventory` it runs as the
+unprivileged atalaya account and is excluded from the manifest merge at startup. **No dispatcher
+entry**: nothing here can change anything.
+
+Only variable **names** are emitted, never values. Values live in `secrets/`, which is `700` and
+stays that way; names are what makes "which variables is this instance missing" answerable
+without exposing anything — and they are what Phase 4 will need.
+
+atalaya reads it from the first server that answers and reports which one, rather than merging
+all three. The file is identical across the fleet today (same sha256, verified), but a server on
+`develop` can legitimately carry a newer catalogue than one on `main`, so which machine answered
+is worth showing rather than hiding. A stale copy is served if none answers: `apps.json` changes
+rarely, and a catalogue read an hour ago beats an empty screen.
 
 ## Running `stack` — the dispatcher, 2026-08-27
 

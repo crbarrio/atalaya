@@ -23,6 +23,7 @@ const DISPATCHER = '/usr/local/sbin/atalaya-stack';
 
 export type CommandName =
   | 'inventory'
+  | 'catalogue'
   | 'status'
   | 'versions'
   | 'logs'
@@ -52,6 +53,8 @@ export const COMMANDS: Record<CommandName, CommandSpec> = {
   // depends on it, so it must keep working on a server whose dispatcher has
   // not been installed yet.
   inventory: { kind: 'read', streams: false, timeoutMs: 20_000, needsInstance: false },
+  // Reads apps.json and nothing else, so it runs unprivileged too.
+  catalogue: { kind: 'read', streams: false, timeoutMs: 20_000, needsInstance: false },
 
   status: { kind: 'read', streams: false, timeoutMs: 30_000, needsInstance: false },
   versions: { kind: 'read', streams: false, timeoutMs: 60_000, needsInstance: true },
@@ -95,7 +98,9 @@ export function buildCommand(request: CommandRequest, stackPath: string): string
     throw new Error(`Refusing to build a command with stackPath '${stackPath}'`);
   }
 
-  if (request.command === 'inventory') return [stackPath, 'inventory'];
+  if (request.command === 'inventory' || request.command === 'catalogue') {
+    return [stackPath, request.command];
+  }
 
   const argv = ['sudo', '-n', '-u', OWNER, DISPATCHER, request.command];
 

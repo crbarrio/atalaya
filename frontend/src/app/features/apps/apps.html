@@ -1,0 +1,182 @@
+<div class="flex flex-col gap-6">
+  <div class="flex flex-wrap items-baseline justify-between gap-2">
+    <h1 class="font-jetbrains text-on-surface text-lg uppercase tracking-wide">Applications</h1>
+    @if (catalogue(); as c) {
+      <span class="text-on-surface-variant text-xs">
+        {{ apps().length }} in the catalogue · {{ deployedCount() }} deployed somewhere ·
+        read from <span class="font-jetbrains">{{ c.source }}</span>
+      </span>
+    }
+  </div>
+
+  @if (resource.isLoading() && apps().length === 0) {
+    <p class="text-on-surface-variant text-xs">Loading…</p>
+  } @else if (resource.error()) {
+    <p class="rounded-xs border border-error/30 bg-error/10 p-3 text-xs text-error">
+      No server could return the catalogue. It is read over SSH from any registered stack server.
+    </p>
+  } @else {
+    <div class="flex flex-col gap-3">
+      @for (app of apps(); track app.name) {
+        <div class="rounded-xs border border-outline-variant bg-surface-container-low">
+          <button
+            type="button"
+            (click)="toggle(app.name)"
+            class="flex w-full flex-col gap-2 p-4 text-left hover:bg-surface-container-highest/40"
+          >
+            <div class="flex flex-wrap items-center justify-between gap-2">
+              <div class="flex flex-wrap items-center gap-2">
+                <span class="font-jetbrains text-on-surface text-sm">{{ app.name }}</span>
+                @if (app.database) {
+                  <span class="rounded-xs bg-surface-container-highest px-1.5 py-0.5 text-[10px] uppercase text-on-surface-variant">
+                    {{ app.database }}
+                  </span>
+                }
+                @if (app.deployments.length === 0) {
+                  <span class="rounded-xs bg-tertiary/15 px-1.5 py-0.5 text-[10px] uppercase text-tertiary">
+                    not deployed
+                  </span>
+                }
+              </div>
+
+              <div class="flex items-center gap-3 text-on-surface-variant text-[11px]">
+                <span>{{ app.services.length }} service(s)</span>
+                @if (app.deployments.length > 0) {
+                  <span class="font-jetbrains text-on-surface">
+                    {{ app.deployments.length }} instance(s)
+                  </span>
+                  @if (clientsOf(app).length > 1) {
+                    <span>{{ clientsOf(app).length }} clients</span>
+                  }
+                }
+                <span class="material-symbols-outlined text-base">
+                  {{ expanded() === app.name ? 'expand_less' : 'expand_more' }}
+                </span>
+              </div>
+            </div>
+
+            @if (app.description) {
+              <span class="text-on-surface-variant text-xs">{{ app.description }}</span>
+            }
+          </button>
+
+          @if (expanded() === app.name) {
+            <div class="flex flex-col gap-4 border-t border-outline-variant p-4">
+              @if (app.repo) {
+                <a
+                  href="https://github.com/{{ app.repo }}"
+                  target="_blank"
+                  rel="noopener"
+                  class="w-fit rounded-xs bg-primary/10 px-2 py-1 font-jetbrains text-[11px] text-primary hover:underline"
+                >
+                  {{ app.repo }}
+                </a>
+              }
+
+              <!-- Where it runs. The catalogue does not know this; the instance
+                   cache does, and joining them is the point of this screen. -->
+              <div class="flex flex-col gap-2">
+                <span class="font-jetbrains text-on-surface-variant text-[11px] uppercase tracking-wide">
+                  Deployments
+                </span>
+                @if (app.deployments.length === 0) {
+                  <span class="text-on-surface-variant text-xs">
+                    Declared in the catalogue but not running on any registered server.
+                  </span>
+                } @else {
+                  <div class="flex flex-col gap-1">
+                    @for (d of app.deployments; track d.server + '/' + d.instance) {
+                      <a
+                        [routerLink]="['/servers', d.server, d.instance]"
+                        class="flex flex-wrap items-center justify-between gap-2 rounded-xs bg-surface-container-lowest px-3 py-2 hover:bg-surface-container-highest"
+                      >
+                        <span class="flex flex-wrap items-center gap-2">
+                          <span class="font-jetbrains text-on-surface text-xs">{{ d.instance }}</span>
+                          <span class="text-on-surface-variant text-[11px]">on {{ d.server }}</span>
+                          @if (d.client) {
+                            <span class="rounded-xs bg-surface-container-highest px-1.5 py-0.5 text-[10px] uppercase text-on-surface-variant">
+                              {{ d.client }}
+                            </span>
+                          }
+                        </span>
+                        <span class="flex items-center gap-3">
+                          <span class="font-jetbrains text-on-surface-variant text-[11px]">
+                            {{ d.version ?? '—' }}
+                          </span>
+                          <app-state-badge [state]="d.state" />
+                        </span>
+                      </a>
+                    }
+                  </div>
+                }
+              </div>
+
+              <!-- Services, and the variables each declares. Names only: the
+                   values live in secrets/, which atalaya cannot read. -->
+              <div class="grid grid-cols-1 gap-3 lg:grid-cols-2">
+                @for (service of app.services; track service.name) {
+                  <div class="flex flex-col gap-2 rounded-xs border border-outline-variant bg-surface-container-lowest p-3">
+                    <div class="flex flex-wrap items-center gap-2">
+                      <span class="font-jetbrains text-on-surface text-xs">{{ service.name }}</span>
+                      @if (service.proxy) {
+                        <span class="rounded-xs bg-primary/15 px-1.5 py-0.5 text-[10px] uppercase text-primary">
+                          public
+                        </span>
+                      }
+                      @if (service.port) {
+                        <span class="text-on-surface-variant text-[11px]">:{{ service.port }}</span>
+                      }
+                    </div>
+                    <span class="font-jetbrains text-on-surface-variant text-[11px]">
+                      {{ catalogue()?.registry }}/{{ service.image }}
+                    </span>
+
+                    @if (service.volumes.length > 0) {
+                      <div class="flex flex-wrap gap-1">
+                        @for (v of service.volumes; track v) {
+                          <span class="rounded-xs bg-surface-container-highest px-1.5 py-0.5 font-jetbrains text-[10px] text-on-surface-variant">
+                            {{ v }}
+                          </span>
+                        }
+                      </div>
+                    }
+
+                    @if (service.env.length > 0) {
+                      <div class="flex flex-col gap-1">
+                        <span class="text-on-surface-variant text-[10px] uppercase tracking-wide">
+                          Required variables
+                        </span>
+                        <div class="flex flex-wrap gap-1">
+                          @for (v of service.env; track v) {
+                            <span class="rounded-xs bg-surface-container-highest px-1.5 py-0.5 font-jetbrains text-[10px] text-on-surface-variant">
+                              {{ v }}
+                            </span>
+                          }
+                        </div>
+                      </div>
+                    }
+                  </div>
+                }
+              </div>
+
+              @if (app.optional.length > 0) {
+                <div class="flex flex-col gap-1">
+                  <span class="text-on-surface-variant text-[10px] uppercase tracking-wide">
+                    Optional variables ({{ app.optional.length }}) — the app degrades without them
+                  </span>
+                  <div class="flex flex-wrap gap-1">
+                    @for (v of app.optional; track v) {
+                      <span class="rounded-xs bg-surface-container-lowest px-1.5 py-0.5 font-jetbrains text-[10px] text-on-surface-variant">
+                        {{ v }}
+                      </span>
+                    }
+                  </div>
+                </div>
+              }
+            </div>
+          }
+        </div>
+      }
+    </div>
+  }
+</div>
