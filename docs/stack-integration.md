@@ -5,7 +5,7 @@ Everything atalaya needs from `stack`, and the changes made there. The repo itse
 
 ## Pending
 
-- [ ] Delete `../stack/MIGRATION.md`: all three servers are migrated and nothing references it.
+Nothing outstanding.
 
 ## Done
 
@@ -29,6 +29,10 @@ Everything atalaya needs from `stack`, and the changes made there. The repo itse
       `inventory.py` reads back. It is the one place with docker access that already walks every
       volume; the reading account has none.
 - [x] Running `stack` from atalaya, through a dispatcher. See below.
+- [x] `stack versions --json`, so the panel can report which versions exist and which one a bare
+      `deploy` would pick without parsing prose. See the dispatcher section below.
+- [x] `MIGRATION.md` deleted: all three servers were migrated to the renamed layout and nothing
+      referenced it. Recoverable from history if the rename ever needs retracing.
 
 ## The backup as a metric — 2026-08-18
 
@@ -119,9 +123,17 @@ No wildcard, so sudo has no pattern to match wrong. The allowlist lives in a fil
 cannot write, rather than in sudoers globs — historically a rich source of privilege escalation —
 or in atalaya's own code, where a bug would widen what the server accepts.
 
-Allowed: `status`, `versions`, `logs`, `deploy` (optionally `--version <tag>`), `rollback`,
-`start`, `stop`, `backup {full|incremental}`. Instance names and tags must match
-`^[a-z0-9][a-z0-9._-]*$`; arguments are forwarded as an array, never re-split from a string.
+Allowed: `status`, `versions` (optionally `--json`), `logs`, `deploy` (optionally
+`--version <tag>`), `rollback`, `start`, `stop`, `backup {full|incremental}`. Instance names and
+tags must match `^[a-z0-9][a-z0-9._-]*$`; arguments are forwarded as an array, never re-split
+from a string. Each flag is accepted only on the subcommand that takes it — `logs --json` and
+`versions --dry-run` are both refused.
+
+`versions --json` exists for the same reason `inventory` does. The printed form is prose with
+ANSI and unicode in it, and the panel needs three things from it: which versions are published,
+which is running, and which one a bare `deploy` would pick — that last being the only way to say
+"deploying would change nothing". Parsing the human output would have broken at the first label
+change. The JSON rows are collected while that output is produced, so the two cannot disagree.
 
 **`exec` is absent and must stay absent.** `stack exec` is `docker compose exec <svc>
 <command...>` — a remote shell, which is the one thing PLAN.md prohibits outright. `retire` and

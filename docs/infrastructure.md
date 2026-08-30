@@ -5,9 +5,7 @@ application.
 
 ## Pending
 
-- [ ] `madrid-prod` connects over a relay rather than directly. Harmless; see below.
-- [ ] Phase 3 will need a `sudoers` rule letting `atalaya` run **only**
-      `/home/ubuntu/docker/stack/stack` as `ubuntu`. Deliberately not added yet.
+Nothing outstanding.
 
 ## The fleet
 
@@ -60,22 +58,35 @@ The permissions already on the machines decided the design, so nothing had to be
 ubuntu                     (ALL) NOPASSWD: ALL
 ```
 
-`atalaya` is in the `ubuntu` **group** and has **no sudo**. That gives it exactly the inventory —
-`state/`, `apps.json`, `servers/`, `last_status` — and denies it the secrets, because `secrets/`
-is `700` and group membership stops at the door. Reusing the `ubuntu` user instead would have
-handed atalaya passwordless root on all three servers.
+`atalaya` is in the `ubuntu` **group** and has no general sudo. That gives it exactly the
+inventory — `state/`, `apps.json`, `servers/`, `last_status` — and denies it the secrets, because
+`secrets/` is `700` and group membership stops at the door. Reusing the `ubuntu` user instead
+would have handed atalaya passwordless root on all three servers.
 
-The key is restricted in `authorized_keys` with `from="…",restrict`. Verified on `marsella-test`:
+Since Phase 3 there is **one** exception, and it is not a rule pointing at `stack` directly as
+this file used to anticipate: the account may run `/usr/local/sbin/atalaya-stack` as `ubuntu`, a
+root-owned dispatcher holding the list of subcommands it accepts. The indirection is the point —
+the allowlist lives in a file `atalaya` cannot write, and sudo gets one exact path with no
+wildcard to mis-match. Reasoning and rejected alternatives in
+[stack-integration.md](stack-integration.md).
+
+The key is restricted in `authorized_keys` with `from="…",restrict,pty`. `pty` is there because
+`stack logs` never exits: without a terminal, closing the channel does not signal the remote
+process group and every viewer who walked away left a follower running. Verified on
+`marsella-test`:
 
 | Check | Result |
 |---|---|
 | Read `state/manifest.json` | 10 instances, 7 clients |
 | Read `secrets/acme.env` | `Permission denied` |
 | `sudo -n id` | `a password is required` |
+| `sudo -n -u ubuntu id` | `a password is required` — the rule is bound to the dispatcher, not the user |
+| `atalaya-stack exec …` | refused; so are `retire`, `add` and metacharacters in a name |
 | Same key over the public hostname | `Permission denied (publickey)` |
 
 That last row is the point: SSH-over-Tailscale stops being an intention and becomes an enforced
-property of the key.
+property of the key. The two rows above it are the same idea applied to the privilege: what the
+account may do is asserted, not assumed, and `setup-server.sh --check` re-asserts it.
 
 ### Development access
 
@@ -107,7 +118,7 @@ on its own.
 A separate disk on purpose: if metrics run away, they fill their own disk without taking down the
 system of the machine that runs the household DNS, Plex and Home Assistant.
 
-## Minor pending — `madrid-prod` connects via relay
+## Accepted — `madrid-prod` connects via relay
 
 Tailscale first attempts a **direct** connection between nodes, punching through each side's NAT
 over UDP/41641. Failing that, it falls back to **DERP**, Tailscale's relay network: an outbound
@@ -123,8 +134,10 @@ The punch-through is not instantaneous. All three nodes started on DERP; ten min
 | `marsella-test` | direct `203.0.113.12:41641` | 10 ms (was 45 ms) |
 
 `madrid-prod` stayed on the relay. Unverified hypothesis: its Oracle Cloud security list does not
-admit inbound UDP on 41641. **Deliberately not investigated** — at 11 ms over the relay it
-affects nothing here, neither metric scraping nor the Phase 3 log streaming.
+admit inbound UDP on 41641. **Deliberately not investigated, and closed rather than left
+pending** — at 11 ms it affects nothing. Metric scraping never noticed, and Phase 3's log
+streaming was verified over this very relay: 200 lines of a live `stack logs` from `madrid-prod`,
+with no perceptible lag.
 
-To pick it up: `tailscale status` distinguishes `direct` from `relay "xxx"`, and
+If it ever does matter: `tailscale status` distinguishes `direct` from `relay "xxx"`, and
 `tailscale ping <ip>` reports which route each packet takes.

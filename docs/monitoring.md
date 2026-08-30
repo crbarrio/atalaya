@@ -338,8 +338,14 @@ The script now verifies both directions:
 ✓ label 'stack.client' present in the metrics
 ✓ atalaya reads stack's inventory
 ✓ atalaya cannot read the secrets
-✓ atalaya has no sudo
+✓ atalaya may run the dispatcher
+✓ atalaya has no sudo beyond it
+✓ the dispatcher refused 5 disallowed calls
 ```
+
+The last three arrived with Phase 3, which replaced a flat "has no sudo" check: the account now
+has exactly one sudo entry, so what matters is that it is the only one and that the dispatcher
+turns away everything outside its list. Those refusals are executed, not assumed.
 
 Two more bugs surfaced while proving it on `marsella-test`:
 
