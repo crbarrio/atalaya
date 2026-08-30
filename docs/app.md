@@ -27,8 +27,6 @@ missing, which are set — never their values. See [PLAN.md](PLAN.md).
 - [ ] `stack add` — creating an instance means domains, client, database and secrets, which
       overlaps Phase 4's territory and should follow it.
 
-**Phase 5 — deploying atalaya through `stack`.** See [stack-integration.md](stack-integration.md).
-
 ## Decisions, not pending work
 
 - **The SSH client does not verify host keys.** Over Tailscale the transport is already
@@ -147,6 +145,29 @@ missing, which are set — never their values. See [PLAN.md](PLAN.md).
       itself was needed to stop `logs` leaking processes — see
       [stack-integration.md](stack-integration.md) — and it turns every newline into `\r\n`,
       which the redraw handling first read as "replace this line", rendering every line empty.
+- [x] **Overview and Servers stopped being the same page — 2026-08-30**: both routes did
+      `loadComponent` on the *same* `Overview` component, so the sidebar had two entries for one
+      screen. `/servers` now has its own component with the fleet grid, and Overview answers a
+      different question — what needs looking at now.
+      It **computes nothing**. Prometheus's rules already decide what counts as a problem, with
+      thresholds tuned and the per-disk mutes applied, and those reach `Incident` through the
+      webhook; re-deriving any of it here would mean two definitions of "wrong" that could
+      disagree. Two things are added because no alert can see them: a server Prometheus scrapes
+      happily while its SSH inventory read has been failing for hours, and a backup that has
+      *never* run, which emits no metric to alert on. The other half of the screen is the audit
+      trail — recorded since Phase 3 and, until now, displayed nowhere.
+- [x] **Applications, the catalogue — 2026-08-30**: `/apps` lists what `stack` can deploy,
+      independent of what any machine runs. Description, the GitHub repo, database engine,
+      services with their images and volumes, and the variables each declares — **names only**,
+      since values live in `secrets/` which atalaya cannot read. Each app also shows where it
+      actually runs, joining the catalogue to the instance cache: `booking-platform` turns out to
+      be one application behind 5 instances for 3 clients, which nothing in the panel could
+      answer before. Needed a new `stack catalogue` contract — see
+      [stack-integration.md](stack-integration.md).
+      Caught while reviewing it: every deployment showed `UNKNOWN`, because this screen read the
+      instance's cached state without resolving it against cAdvisor the way the server pages do.
+      `unknown` is the normal answer from SSH, so the badge was noise. Resolved now with one
+      Prometheus query per server rather than per instance.
 - [x] **Real version data, and two columns — 2026-08-27**: the version card showed the inventory
       cache — what was deployed as of the last read — which goes stale the moment anything is
       deployed outside the panel, and said nothing about what is *available*. It now reads

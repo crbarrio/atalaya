@@ -1,33 +1,41 @@
 import { Component, computed, inject } from '@angular/core';
+import { RouterLink } from '@angular/router';
 
+import { OverviewService } from '../../core/services/overview.service';
 import { ServersService } from '../../core/services/servers.service';
+import { RelativeTimePipe } from '../../shared/pipes/relative-time.pipe';
+import { valueOr } from '../../shared/resource-value';
 import { MetaChip } from '../../shared/ui/meta-chip/meta-chip';
-import { ServerCard } from './server-card/server-card';
 
+/**
+ * Answers "what should I look at now". The server grid at `/servers` answers
+ * "how is each machine" — a different question, and the reason these are two
+ * screens rather than the same one shown twice, which is what they were.
+ */
 @Component({
   selector: 'app-overview',
-  imports: [ServerCard, MetaChip],
+  imports: [RouterLink, MetaChip, RelativeTimePipe],
   templateUrl: './overview.html',
 })
 export class Overview {
+  private readonly overviewService = inject(OverviewService);
   private readonly serversService = inject(ServersService);
 
-  readonly servers = this.serversService.list();
-  readonly isLoading = this.serversService.isLoading;
-  readonly error = this.serversService.error;
+  protected readonly resource = this.overviewService.overview();
+  protected readonly data = computed(() => valueOr(this.resource, undefined));
 
-  readonly totalInstances = computed(() =>
-    this.servers().reduce((sum, s) => sum + s.counts.total, 0),
+  protected readonly attention = computed(() => this.data()?.attention ?? []);
+  protected readonly recent = computed(() => this.data()?.recent ?? []);
+  protected readonly counts = computed(
+    () => this.data()?.counts ?? { servers: 0, instances: 0, attention: 0 },
   );
-  
-  /**
-   * A host server has no backups to report — `null` there means "not
-   * applicable", not "never ran", so only its health counts.
-   */
-  readonly issues = computed(
-    () =>
-      this.servers().filter(
-        (s) => s.health !== 'ok' || (s.kind !== 'host' && s.backup.status !== 'OK'),
-      ).length,
-  );
+
+  /** Only to tell "still loading" from "genuinely nothing wrong". */
+  protected readonly servers = this.serversService.list();
+  protected readonly isLoading = this.resource.isLoading;
+  protected readonly error = this.resource.error;
+
+  protected icon(kind: string): string {
+    return { incident: 'warning', unreachable: 'link_off', backup: 'backup' }[kind] ?? 'info';
+  }
 }
