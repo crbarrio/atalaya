@@ -258,6 +258,14 @@
         </div>
 
       </div>
+
+      <!-- Full width rather than a fifth card: the list is as long as the
+           application declares, which on some apps is fifteen rows. -->
+      <app-instance-variables
+        [server]="name()"
+        [instance]="instance.name"
+        (apply)="applyVariables()"
+      />
     </div>
 
     <p class="text-on-surface-variant text-xs">Read {{ instance.fetchedAt | relativeTime }}</p>

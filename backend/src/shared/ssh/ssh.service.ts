@@ -10,6 +10,10 @@ const DEFAULT_TIMEOUT_MS = 20_000;
 /** Long-running commands are silent for minutes; without this the TCP connection is dropped. */
 const KEEPALIVE_MS = 20_000;
 
+// eslint-disable-next-line no-control-regex
+const ANSI = /\u001b\[[0-9;]*m/g;
+const stripAnsi = (text: string): string => text.replace(ANSI, '');
+
 /** One piece of output, as it happens. `exit` is terminal and always last. */
 export type CommandEvent =
   | { type: 'output'; stream: 'stdout' | 'stderr'; text: string }
@@ -27,6 +31,35 @@ export class SshService {
     target: SshTarget,
     request: CommandRequest,
     timeoutMs = DEFAULT_TIMEOUT_MS,
+  ): Promise<string> {
+    return this.collect(target, request, timeoutMs);
+  }
+
+  /**
+   * The same, with a document written to the command's standard input.
+   *
+   * That is how a variable's value reaches the server: as an argument it would
+   * be visible in `ps` to every user on the machine for as long as the command
+   * runs, and it would have to survive being joined into the single line
+   * `exec` takes.
+   *
+   * No pty here, unlike `stream()`. A pty echoes stdin straight back into
+   * stdout, which would put the value in the output this returns.
+   */
+  async runWithInput(
+    target: SshTarget,
+    request: CommandRequest,
+    input: string,
+    timeoutMs = DEFAULT_TIMEOUT_MS,
+  ): Promise<string> {
+    return this.collect(target, request, timeoutMs, input);
+  }
+
+  private async collect(
+    target: SshTarget,
+    request: CommandRequest,
+    timeoutMs: number,
+    input?: string,
   ): Promise<string> {
     const line = buildCommand(request, target.stackPath).join(' ');
     const command = request.command;
@@ -63,12 +96,18 @@ export class SshService {
                   : finish(
                       new Error(
                         `${target.name}: '${command}' exited ${code}` +
-                          (stderr ? `: ${stderr.trim()}` : ''),
+                          // `stack` colours its errors; the escapes would reach
+                          // the browser as literal text inside the message.
+                          (stderr ? `: ${stripAnsi(stderr).trim()}` : ''),
                       ),
                     ),
               )
               .on('data', (chunk: Buffer) => (stdout += chunk.toString()))
               .stderr.on('data', (chunk: Buffer) => (stderr += chunk.toString()));
+
+            if (input !== undefined) {
+              stream.end(input);
+            }
           });
         })
         .on('error', (err) => finish(new Error(`${target.name}: ${err.message}`)))

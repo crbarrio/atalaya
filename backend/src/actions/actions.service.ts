@@ -190,12 +190,34 @@ export class ActionsService {
   }
 
   /**
+   * Runs `work` holding the same per-instance lock the streamed actions take,
+   * so a variable being written cannot overlap a deploy of that instance.
+   * Shared rather than duplicated: two locks would not exclude each other.
+   */
+  async withLock<T>(key: string, work: () => Promise<T>): Promise<T> {
+    if (this.running.has(key)) {
+      throw new ConflictException(`Another action is already running on '${key}'`);
+    }
+    this.running.add(key);
+    try {
+      return await work();
+    } finally {
+      this.running.delete(key);
+    }
+  }
+
+  /** The reason a failure is worth showing, for callers outside this service. */
+  describe(message: string): string {
+    return this.explain(message);
+  }
+
+  /**
    * Server, instance and target. The instance is checked against the cached
    * `Instance` table — PLAN.md requires a made-up name be rejected before SSH
    * is touched. The cache can lag a freshly added instance, so a miss triggers
    * one refresh and a re-check before giving up.
    */
-  private async resolve(
+  async resolve(
     serverName: string,
     request: CommandRequest,
   ): Promise<{ target: SshTarget; key: string }> {
@@ -242,7 +264,7 @@ export class ActionsService {
   private entry(serverName: string, request: CommandRequest, actor: string) {
     return {
       actor,
-      action: `stack ${request.command}` as string,
+      action: `stack ${request.command}`,
       target: `${serverName}/${request.argument ?? ''}`.replace(/\/$/, ''),
       detail: { command: request.command, argument: request.argument, version: request.version },
     };

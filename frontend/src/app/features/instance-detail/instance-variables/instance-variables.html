@@ -1,0 +1,227 @@
+<div class="flex flex-col gap-3 rounded-xs border border-outline-variant bg-surface-container-low p-4">
+  <div class="flex flex-wrap items-center justify-between gap-2">
+    <span class="font-jetbrains text-on-surface-variant text-xs uppercase">Variables</span>
+
+    <div class="flex items-center gap-3">
+      @if (resource.isLoading()) {
+        <span class="text-on-surface-variant text-[11px]">reading…</span>
+      } @else if (unavailable()) {
+        <span class="text-tertiary text-[11px]">could not read them</span>
+      } @else if (report(); as r) {
+        <span class="text-on-surface-variant text-[11px]">
+          {{ counts().set }} of {{ counts().total }} set
+          @if (counts().missing > 0) {
+            <span class="text-error">· {{ counts().missing }} missing</span>
+          }
+        </span>
+        @if (r.mode && r.mode !== '600') {
+          <span class="text-error text-[11px]">mode {{ r.mode }}, must be 600</span>
+        }
+      }
+
+      <button
+        type="button"
+        (click)="expanded.set(!expanded())"
+        class="rounded-xs border border-outline-variant px-3 py-1.5 font-jetbrains text-[11px] uppercase text-on-surface hover:bg-surface-container-highest"
+      >
+        {{ expanded() ? 'Hide' : 'Show' }}
+      </button>
+    </div>
+  </div>
+
+  <!-- A change is written to the file but the containers keep the environment
+       they started with, so saying nothing here would look like it worked. -->
+  @if (savedNames().length > 0) {
+    <div class="flex flex-wrap items-center justify-between gap-3 rounded-xs border border-tertiary/40 bg-tertiary/5 p-3">
+      <p class="text-on-surface text-xs">
+        Saved
+        <span class="font-jetbrains">{{ savedNames().join(', ') }}</span>.
+        <span class="text-on-surface-variant">
+          Not live until the instance is redeployed — its containers still hold the old environment.
+        </span>
+      </p>
+      <div class="flex items-center gap-2">
+        <button
+          type="button"
+          (click)="dismiss()"
+          class="rounded-xs border border-outline-variant px-3 py-1.5 font-jetbrains text-[11px] uppercase text-on-surface hover:bg-surface-container-highest"
+        >
+          Later
+        </button>
+        <button
+          type="button"
+          (click)="applyNow()"
+          class="rounded-xs bg-primary px-3 py-1.5 font-jetbrains text-[11px] uppercase text-on-primary"
+        >
+          Redeploy now
+        </button>
+      </div>
+    </div>
+  }
+
+  @if (unavailable(); as reason) {
+    <p class="text-on-surface-variant text-xs">{{ reason }}</p>
+  }
+
+  @if (expanded() && report(); as r) {
+    @if (!r.exists) {
+      <p class="text-on-surface-variant text-xs">
+        No secrets file yet. Setting a variable creates it, at mode 600.
+      </p>
+    }
+
+    <ul class="flex flex-col divide-y divide-outline-variant">
+      @for (variable of rows(); track variable.name) {
+        <li class="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 py-2">
+          <span class="flex min-w-0 flex-wrap items-center gap-2">
+            <span class="font-jetbrains text-on-surface text-xs">{{ variable.name }}</span>
+
+            @switch (variable.kind) {
+              @case ('optional') {
+                <span class="text-on-surface-variant text-[10px] uppercase tracking-wide">optional</span>
+              }
+              @case ('undeclared') {
+                <span class="text-tertiary text-[10px] uppercase tracking-wide">not in apps.json</span>
+              }
+            }
+
+            @if (pendingState(variable); as change) {
+              <span class="rounded-xs bg-primary/10 px-1.5 py-0.5 text-primary text-[10px] uppercase tracking-wide">
+                will be {{ change }}
+              </span>
+            } @else if (variable.set) {
+              <span class="text-secondary text-[11px]">set</span>
+            } @else if (variable.kind === 'required') {
+              <span class="text-error text-[11px]">missing</span>
+            } @else {
+              <span class="text-on-surface-variant text-[11px]">not set</span>
+            }
+          </span>
+
+          @if (editing() === variable.name) {
+            <span class="flex flex-1 flex-wrap items-center justify-end gap-2">
+              <input
+                type="text"
+                autocomplete="off"
+                spellcheck="false"
+                [value]="draft()"
+                (input)="draft.set($any($event.target).value)"
+                (keydown.enter)="keep()"
+                (keydown.escape)="cancel()"
+                placeholder="new value"
+                class="min-w-0 flex-1 rounded-xs border border-outline-variant bg-surface-container-lowest px-2 py-1.5 font-jetbrains text-[11px] text-on-surface"
+              />
+              <button
+                type="button"
+                (click)="cancel()"
+                class="rounded-xs border border-outline-variant px-3 py-1.5 font-jetbrains text-[11px] uppercase text-on-surface hover:bg-surface-container-highest"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                [disabled]="!draft()"
+                (click)="keep()"
+                class="rounded-xs bg-primary px-3 py-1.5 font-jetbrains text-[11px] uppercase text-on-primary disabled:opacity-40"
+              >
+                Keep
+              </button>
+            </span>
+          } @else {
+            <span class="flex items-center gap-2">
+              @if (pendingState(variable)) {
+                <button
+                  type="button"
+                  (click)="undo(variable.name)"
+                  class="rounded-xs border border-outline-variant px-3 py-1.5 font-jetbrains text-[11px] uppercase text-on-surface hover:bg-surface-container-highest"
+                >
+                  Undo
+                </button>
+              } @else {
+                @if (variable.kind !== 'undeclared') {
+                  <button
+                    type="button"
+                    (click)="open(variable.name)"
+                    class="rounded-xs border border-outline-variant px-3 py-1.5 font-jetbrains text-[11px] uppercase text-on-surface hover:bg-surface-container-highest"
+                  >
+                    {{ variable.set ? 'Change' : 'Set' }}
+                  </button>
+                }
+                @if (variable.set) {
+                  <button
+                    type="button"
+                    (click)="remove(variable.name)"
+                    class="rounded-xs border border-outline-variant px-3 py-1.5 font-jetbrains text-[11px] uppercase text-on-surface-variant hover:bg-surface-container-highest"
+                  >
+                    Unset
+                  </button>
+                }
+              }
+            </span>
+          }
+        </li>
+      } @empty {
+        <li class="py-2 text-on-surface-variant text-xs">
+          This application declares no variables.
+        </li>
+      }
+    </ul>
+
+    <p class="text-on-surface-variant text-[11px]">
+      {{ r.file }}
+      @if (r.modifiedAt) {
+        · last changed {{ r.modifiedAt * 1000 | date: 'medium' }}
+      }
+      · values are never read back, only replaced
+    </p>
+  }
+
+  <!-- The change named before it is made, same shape as the action
+       confirmations above. Names only: a value is never shown, not even the
+       one just typed. -->
+  @if (hasPending()) {
+    <div class="flex flex-col gap-3 rounded-xs border border-tertiary/40 bg-tertiary/5 p-3">
+      <p class="text-on-surface text-xs">
+        Write to <span class="font-jetbrains">{{ instance() }}</span> on
+        <span class="font-jetbrains">{{ server() }}</span>?
+      </p>
+      <ul class="flex flex-col gap-0.5 text-[11px]">
+        @for (name of pending().set; track name) {
+          <li>
+            <span class="font-jetbrains text-on-surface">{{ name }}</span>
+            <span class="text-on-surface-variant">&mdash; set to a new value</span>
+          </li>
+        }
+        @for (name of pending().unset; track name) {
+          <li>
+            <span class="font-jetbrains text-on-surface">{{ name }}</span>
+            <span class="text-on-surface-variant">&mdash; cleared</span>
+          </li>
+        }
+      </ul>
+
+      @if (error(); as reason) {
+        <p class="rounded-xs border border-error/30 bg-error/10 p-2 text-error text-xs">{{ reason }}</p>
+      }
+
+      <div class="flex items-center gap-2">
+        <button
+          type="button"
+          [disabled]="saving()"
+          (click)="discard()"
+          class="rounded-xs border border-outline-variant px-3 py-1.5 font-jetbrains text-[11px] uppercase text-on-surface hover:bg-surface-container-highest disabled:opacity-40"
+        >
+          Discard
+        </button>
+        <button
+          type="button"
+          [disabled]="saving()"
+          (click)="save()"
+          class="rounded-xs bg-primary px-3 py-1.5 font-jetbrains text-[11px] uppercase text-on-primary disabled:opacity-40"
+        >
+          {{ saving() ? 'Writing…' : 'Write' }}
+        </button>
+      </div>
+    </div>
+  }
+</div>

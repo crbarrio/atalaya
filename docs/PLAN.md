@@ -70,7 +70,9 @@ audit trail, and an inventory cache.
   `homeserver`, not on a workstation. Since Phase 3 that `sudo` is exactly one line: the account
   may run `/usr/local/sbin/atalaya-stack` as `ubuntu`, a root-owned dispatcher holding the list
   of `stack` subcommands it accepts. No wildcard, and the list is in a file the account cannot
-  write. Details in [stack-integration.md](stack-integration.md).
+  write. **Nor can it write the program the dispatcher runs** — that was not true until Phase 4
+  found it, and it made the allowlist decorative. Details in
+  [stack-integration.md](stack-integration.md).
 - **atalaya does not provision by itself.** It generates the installation artifact and checks the
   result, but a person supplies the `sudo` that installs it, once. This is not a limitation to be
   overcome later — it is what stops the panel from becoming a machine capable of installing
@@ -337,11 +339,24 @@ secrets and belongs with Phase 4.
 Provisioning is **not here**: it was solved in v1 by generating the artifact instead of running
 it, and there is no intention of later "promoting" it to remote execution.
 
-### Phase 4 — Environment variables
+### Phase 4 — Environment variables — Done, 2026-08-30
 
 An editor for `secrets/<instance>.env` with the schema derived from `services[].env` in
 `apps.json`: which variables the app requires, which are missing, which are set. Write-only,
-preserving 600 permissions.
+preserving 600 permissions. All of that, plus the part the description did not anticipate — a
+saved change is not a live change, so the panel offers the redeploy that applies it.
+
+The contract is `stack secrets <inst> {--json|--set}`, and the value travels on **stdin**: as an
+argument it would be visible in `ps` on the server. Setting is limited to variables `apps.json`
+declares; unsetting is not, so leftovers can be cleared. Reasoning in
+[stack-integration.md](stack-integration.md), the UI in [app.md](app.md).
+
+**Building it found a hole in Phase 3.** The atalaya account could write `stack` itself — the
+program the dispatcher runs as an account in the docker group — because it is in the owner's group
+and Ubuntu's default umask leaves group write on everything `git pull` writes. The allowlist was
+bounding what could be asked for while the program answering could be replaced. Fixed in three
+places, including a check inside the dispatcher that fails closed; see
+[stack-integration.md](stack-integration.md).
 
 ### ~~Phase 5 — Deploying atalaya~~ — dropped, 2026-08-27
 

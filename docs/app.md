@@ -4,22 +4,6 @@ The monorepo itself: backend, frontend, and what is built so far.
 
 ## Pending
 
-**Phase 4 — the environment variable editor.** Which variables an instance requires, which are
-missing, which are set — never their values. See [PLAN.md](PLAN.md).
-
-- [ ] **Reading which variables are set needs a `stack` contract first**, the same blocker Phase 3
-      hit: `secrets/` is `700 ubuntu` and the atalaya account cannot read it, by design. `stack`
-      already computes required/optional/missing inside `verify_secrets`, so the shape is a
-      `secrets <inst> --json` reporting names and set/unset — **never values** — alongside
-      `inventory` and `versions --json`. Nothing to design in the panel until that exists.
-- [ ] Writing them needs its own dispatcher entry, and it is the first one that takes operator
-      input rather than a name from a closed list. Whatever validates it belongs in the
-      dispatcher, where atalaya cannot reach it.
-- [ ] Write-only in the UI: a value goes in and is never rendered back, matching how notification
-      channel credentials already behave. What is shown is *which* variables are missing.
-- [ ] The file must stay `600`, and `stack deploy` already refuses if a declared variable is
-      missing or empty — so the editor should surface that check rather than duplicate it.
-
 **Deferred from Phase 3**, each its own decision rather than a leftover:
 
 - [ ] `stack retire` — removes an instance, irreversibly with `--with-data`. Needs a type-the-name
@@ -186,6 +170,51 @@ missing, which are set — never their values. See [PLAN.md](PLAN.md).
       With Prometheus unreachable, one 500 from the deploy-history request stopped the entire
       instance page rendering — actions included. Found while testing actions, not by inspection.
       `shared/resource-value.ts` guards the four reads that could do it.
+- [x] **The variable editor — 2026-08-30**: Phase 4. A full-width section on the instance page
+      listing what the application declares, which are set and which are missing, with set, change
+      and unset. Write-only in the strict sense — the input starts empty every time because
+      nothing on this side ever knew the value. See below.
+
+## The variable editor — 2026-08-30
+
+`secrets/<instance>.env` is `600` inside a `700 ubuntu` directory, so the panel could see which
+variables an application *declares* (from `stack catalogue`) but never which this instance
+actually had. "Which variables is `lyra` missing" — the question `stack deploy` answers by
+refusing — had no answer in the UI.
+
+`stack secrets <inst> --json` answers it now, through the dispatcher. The contract carries names,
+kinds and set-or-not, and **no value, no length, no hash**: that is the whole reason it can cross
+the network at all. Details in [stack-integration.md](stack-integration.md).
+
+Writing is `PUT /api/variables/:server/:instance`, and four decisions keep the value from leaking:
+
+- **It travels on stdin**, not as an argument. An argument is visible in `ps` to every user on the
+  machine for as long as the command runs. `SshService.runWithInput` exists for this, and
+  deliberately uses no pty — a pty echoes stdin back into stdout, which would put the value in the
+  output the caller reads.
+- **A real `PUT` with a body**, not the `@Get` that SSE forced on the actions controller. A value
+  in a query string is in the URL, and URLs reach history, referrers and access logs.
+- **The audit row carries names only.** `AuditEntry.detail` is `{"variables":["PORT"]}` — this is
+  the one place a value could have reached durable storage.
+- **The input starts empty**, always. There is nothing to prefill it with.
+
+Edits are held in the component and saved in one request, behind the same inline confirmation the
+actions use, listing which variables are about to change and never what they will become.
+
+**A saved change is not a live change.** The containers keep the environment they started with, so
+a banner says so and offers the `start` action — `stack start` is `deploy --version <recorded>`,
+which recreates the containers *without* moving the instance to a newer build, which is what a
+bare `deploy` would do. No new privilege for it: `start` was already in the allowlist.
+
+The one rule that matters — a variable may only be **set** if `apps.json` declares it — is checked
+on the server, where the catalogue is. Unsetting is not restricted, so the undeclared leftovers
+`check_secret_coherence` warns about can be cleared. The backend repeats the cheap checks to fail
+before a round trip, and says so in a comment: it is not the boundary.
+
+Verified end to end against `compas` on `marsella-test`: the refusals, the write leaving mode
+`600` and the file's comments intact, the report leaking no value, and unsetting a *required*
+variable making `stack deploy` refuse and name it — the failure path being what makes a bad edit
+visible rather than silent.
 
 ## Layout, modelled on `compas`
 

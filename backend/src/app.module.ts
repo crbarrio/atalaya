@@ -15,6 +15,7 @@ import { MonitoringModule } from './monitoring/monitoring.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { RegistrationModule } from './registration/registration.module';
 import { SearchModule } from './search/search.module';
+import { VariablesModule } from './variables/variables.module';
 import { ServersModule } from './servers/servers.module';
 import { SettingsModule } from './settings/settings.module';
 import { SshModule } from './shared/ssh/ssh.module';
@@ -36,6 +37,7 @@ import { WebhooksModule } from './webhooks/webhooks.module';
     ChannelsModule,
     SearchModule,
     ActionsModule,
+    VariablesModule,
     CatalogueModule,
     OverviewModule,
     AuditModule,

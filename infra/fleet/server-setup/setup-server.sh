@@ -410,8 +410,14 @@ setup_atalaya_user() {
 #
 # `exec` is absent on purpose and must stay absent: `stack exec` is
 # `docker compose exec <svc> <command...>`, which is a remote shell. `retire`
-# and `add` are absent because they are destructive and configuration-writing
+# and `add` are absent because they are destructive and instance-creating
 # respectively; both are separate decisions, not a parameter.
+#
+# `secrets` is how the panel reaches secrets/ despite the account not being able
+# to open it — through this program, as the owner, and only in the two shapes
+# the case below accepts. It is the one entry whose input cannot be enumerated
+# in advance, which is why that input never reaches this file: it comes on stdin
+# and is validated by `stack`'s own scripts, equally out of the account's reach.
 install_command_dispatcher() {
   step "command dispatcher"
 
@@ -501,6 +507,15 @@ case "$subcommand" in
     [[ "${1:-}" == "full" || "${1:-}" == "incremental" ]] \
       || die "backup takes 'full' or 'incremental'"
     [[ $# -eq 1 ]] || die "backup takes no further arguments"
+    ;;
+  secrets)
+    # The only entry carrying operator input, and it never arrives here: --set
+    # reads the change from stdin, which `exec` below passes through untouched.
+    # An argument would be visible in `ps` to every user on the machine.
+    [[ $# -ge 1 ]] || die "secrets needs an instance"
+    valid_name "$1" || die "bad instance name"
+    [[ $# -eq 2 && ("$2" == "--json" || "$2" == "--set") ]] \
+      || die "secrets takes an instance and either --json or --set"
     ;;
   *)
     die "refused: '$subcommand' is not an allowed subcommand"
@@ -712,6 +727,15 @@ verify() {
         failures=$((failures + 1))
       else
         ok "$ATALAYA_USER cannot modify what the dispatcher runs"
+      fi
+
+      # `secrets` is the entry that writes configuration, so the two forms it
+      # takes are asserted to be the only two it takes.
+      if sudo -n -u "$STACK_OWNER" /usr/local/sbin/atalaya-stack secrets x --dump 2>/dev/null; then
+        fail "the dispatcher ACCEPTED a 'secrets' flag outside --json/--set"
+        failures=$((failures + 1))
+      else
+        refused=$((refused + 1))
       fi
       ok "the dispatcher refused $refused disallowed calls"
     elif sudo -n -l -U "$ATALAYA_USER" 2>&1 | grep -q 'not allowed'; then

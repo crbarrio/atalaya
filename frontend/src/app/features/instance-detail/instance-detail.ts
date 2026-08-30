@@ -13,6 +13,7 @@ import { CommandConsole } from '../../shared/ui/command-console/command-console'
 import { DeployHistory } from '../../shared/ui/deploy-history/deploy-history';
 import { MetaChip } from '../../shared/ui/meta-chip/meta-chip';
 import { StateBadge } from '../../shared/ui/state-badge/state-badge';
+import { InstanceVariables } from './instance-variables/instance-variables';
 
 /** Actions that change the instance, and therefore need confirming first. */
 const DESTRUCTIVE = new Set(['deploy', 'rollback', 'stop', 'start']);
@@ -33,6 +34,7 @@ const DESTRUCTIVE = new Set(['deploy', 'rollback', 'stop', 'start']);
     MetaChip,
     DeployHistory,
     CommandConsole,
+    InstanceVariables,
   ],
   templateUrl: './instance-detail.html',
 })
@@ -143,6 +145,16 @@ export class InstanceDetailPage {
   protected showVersions(): void {
     this.confirming.set(null);
     this.runner.start(this.name(), 'versions', { instance: this.instance() });
+  }
+
+  /**
+   * What makes an edited variable take effect. `stack start` redeploys the
+   * version already recorded, so the containers are recreated with the new
+   * environment without the instance also moving to a newer build — which is
+   * what a bare `deploy` would do.
+   */
+  protected applyVariables(): void {
+    this.run('start');
   }
 
   protected showLogs(): void {

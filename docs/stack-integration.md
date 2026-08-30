@@ -5,17 +5,8 @@ Everything atalaya needs from `stack`, and the changes made there. The repo itse
 
 ## Pending
 
-**Phase 4 needs a secrets contract.** `stack` already computes required/optional/missing inside
-`verify_secrets`; the panel cannot, because `secrets/` is `700 ubuntu`. Tasks tracked in
-[app.md](app.md), but the `stack` half lands here:
-
-- [ ] `stack secrets <inst> --json` — variable names and whether each is set. **Never values**;
-      that is the whole reason it can be exposed at all.
-- [ ] A dispatcher entry for writing one. The first that carries operator input rather than a
-      name from a closed list, so its validation matters more than the others'.
-
-Deploying atalaya itself is **not** pending: it is a clone and three compose commands, decided
-already. See *Why not `stack`* in [app.md](app.md).
+Nothing. Deploying atalaya itself is **not** pending: it is a clone and three compose commands,
+decided already. See *Why not `stack`* in [app.md](app.md).
 
 ## Done
 
@@ -45,6 +36,8 @@ already. See *Why not `stack`* in [app.md](app.md).
       `deploy` would pick without parsing prose. See the dispatcher section below.
 - [x] `MIGRATION.md` deleted: all three servers were migrated to the renamed layout and nothing
       referenced it. Recoverable from history if the rename ever needs retracing.
+- [x] `stack secrets <inst> {--json|--set}` — the variables of one instance, read and written.
+      See below.
 
 ## The backup as a metric — 2026-08-18
 
@@ -137,6 +130,71 @@ all three. The file is identical across the fleet today (same sha256, verified),
 `develop` can legitimately carry a newer catalogue than one on `main`, so which machine answered
 is worth showing rather than hiding. A stale copy is served if none answers: `apps.json` changes
 rarely, and a catalogue read an hour ago beats an empty screen.
+
+## `stack secrets` — 2026-08-30
+
+`inventory` says what runs here, `catalogue` says what each application is. This says what one
+instance is *configured with* — which variables it declares, which are set, and how to change
+them. It needs `secrets/`, which is `700 ubuntu`, so unlike those two it goes through the
+dispatcher and runs as the owner.
+
+`--json` emits names, kinds (`required`, `optional`, `undeclared`) and set-or-not. **No value, no
+length, no fingerprint.** Any of those turns a report that is safe to send over the network into
+one that is not, and there is no field for them to go in.
+
+"Set" means what `verify_secrets` means by it — a line matching `^NAME=.` — so an empty value is
+unset, and so is the `# NAME=` form `stack add` writes for a variable still to be filled in.
+Anything else would have the panel call a variable set that the deployment then refuses over.
+
+`--set` reads `{"set": {...}, "unset": [...]}` from **stdin**. Not arguments: an argument is
+visible in `ps` to every user on the machine for as long as the command runs, and these are
+passwords. `sudo` and the dispatcher's final `exec` both pass stdin through untouched, so the
+dispatcher never sees the value and needs no rule about it.
+
+Three rules in `write_secrets.py`, all applied before anything is written:
+
+- **Setting is limited to names `apps.json` declares.** The editor cannot invent keys, and the
+  list it is checked against is in a file the calling account cannot write. This is the gate.
+- **Unsetting is not limited**, deliberately: the leftovers of a retired feature are exactly what
+  wants clearing, and clearing a value exposes nothing.
+- Values are single-line, ≤ 4096 characters, no control characters. Not fastidiousness — the file
+  is consumed as a Compose `env_file`, which cannot represent a newline in a value at all.
+
+The write goes to a temporary file in the same directory, opened `600` from the start and renamed
+over the original: no window with the value in a world-readable file, and a crash cannot truncate
+the real one. Every line assigning a name is removed and the new one goes where the first was, so
+uncommenting a `# NAME=` placeholder cannot leave a stale assignment behind it, and the file's
+comments and ordering survive.
+
+## The dispatcher could be bypassed — found and fixed 2026-08-30
+
+Verifying the above turned up a hole in Phase 3's design, not in Phase 4's.
+
+The atalaya account is in the owner's group so it can read `state/manifest.json`. Ubuntu gives an
+account whose group matches its name a umask of **002**, so every file `git pull` wrote was group
+writable — including `stack` itself, and `.git/hooks`. The dispatcher `exec`s `stack` as `ubuntu`,
+who is in the docker group. So the account could replace the program the dispatcher runs, and
+reach root through it.
+
+The allowlist was bounding what could be *asked for* while the program answering could be
+replaced. Measured, not theorised: `sudo -u atalaya test -w …/stack` returned true on
+`marsella-test`.
+
+Three changes, because one was not enough:
+
+- `setup-server.sh` removes group and other write from the whole tree, `.git` **included** — a
+  writable `.git/hooks` is the same hole by a slower route, since a `post-merge` hook there runs
+  as the owner on the next pull.
+- It sets the owner's umask to 022, **prepended** to `~/.bashrc`. The stock file returns in its
+  first lines when the shell is not interactive, and `ssh <host> '<command>'` — which is how this
+  repository actually gets updated — is not interactive, so a line appended at the end is never
+  reached. Appending it was the first attempt and did nothing; `umask` still reported 002.
+- The dispatcher itself refuses to run when `stack` or `scripts/` are writable by group or other.
+  Checked on every call, not once at install time, because a pull can undo the permissions at any
+  moment. This is the part that fails closed rather than silently reopening.
+
+`verify()` now asserts the account cannot write what the dispatcher runs, so the check is part of
+every setup run rather than something remembered.
 
 ## Running `stack` — the dispatcher, 2026-08-27
 

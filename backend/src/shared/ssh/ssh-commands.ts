@@ -31,7 +31,9 @@ export type CommandName =
   | 'rollback'
   | 'start'
   | 'stop'
-  | 'backup';
+  | 'backup'
+  | 'secrets'
+  | 'secretsSet';
 
 export interface CommandSpec {
   /**
@@ -46,6 +48,12 @@ export interface CommandSpec {
   timeoutMs: number | null;
   /** Whether the command names an instance. `backup` takes a mode instead. */
   needsInstance: boolean;
+  /**
+   * The dispatcher subcommand, when it is not the key. Reading and writing
+   * variables are one subcommand on the server and two entries here, because
+   * one of them is a `read` and the other a `mutate`.
+   */
+  subcommand?: string;
 }
 
 export const COMMANDS: Record<CommandName, CommandSpec> = {
@@ -68,6 +76,24 @@ export const COMMANDS: Record<CommandName, CommandSpec> = {
   stop: { kind: 'mutate', streams: true, timeoutMs: 5 * 60_000, needsInstance: true },
   // Streams whole volumes to remote storage; on a large instance this is hours.
   backup: { kind: 'mutate', streams: true, timeoutMs: 4 * 60 * 60_000, needsInstance: false },
+
+  // Which variables an instance declares and which are set. Never a value.
+  secrets: {
+    kind: 'read',
+    streams: false,
+    timeoutMs: 30_000,
+    needsInstance: true,
+    subcommand: 'secrets',
+  },
+  // The same subcommand, writing. `mutate`, so it takes the instance lock and
+  // is recorded — the change itself travels on stdin, not in this argv.
+  secretsSet: {
+    kind: 'mutate',
+    streams: false,
+    timeoutMs: 30_000,
+    needsInstance: true,
+    subcommand: 'secrets',
+  },
 };
 
 export interface CommandRequest {
@@ -102,7 +128,7 @@ export function buildCommand(request: CommandRequest, stackPath: string): string
     return [stackPath, request.command];
   }
 
-  const argv = ['sudo', '-n', '-u', OWNER, DISPATCHER, request.command];
+  const argv = ['sudo', '-n', '-u', OWNER, DISPATCHER, spec.subcommand ?? request.command];
 
   if (request.command === 'backup') {
     if (request.argument !== 'full' && request.argument !== 'incremental') {
@@ -118,6 +144,11 @@ export function buildCommand(request: CommandRequest, stackPath: string): string
     }
     argv.push(instance);
   }
+
+  // Fixed flags, chosen by which entry was asked for rather than passed in.
+  // Nothing about the change being written appears here: it goes on stdin.
+  if (request.command === 'secrets') return [...argv, '--json'];
+  if (request.command === 'secretsSet') return [...argv, '--set'];
 
   if (request.version !== undefined) {
     if (request.command !== 'deploy') {
