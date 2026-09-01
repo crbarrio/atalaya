@@ -23,21 +23,32 @@ groups:
 
       # 26 hours, not 24: the cron runs at 02:01 and a run takes minutes, so a
       # threshold of exactly a day would fire on jitter alone.
-      - alert: NoRecentIncrementalBackup
+      #
+      # `max by (server)` over BOTH modes, not `mode="incremental"`. The cron
+      # runs `full` on the 1st and `incremental` on 2-31 — the full REPLACES
+      # that night's incremental rather than joining it. Keyed to the
+      # incremental series alone this fired on every server every month, on the
+      # 1st, about a machine whose data had just been backed up more completely
+      # than an incremental would have. A full is not a missing incremental.
+      - alert: NoRecentBackup
         expr: >-
-          time() - stack_backup_last_success_timestamp_seconds{mode="incremental"}
+          time() - max by (server) (stack_backup_last_success_timestamp_seconds)
           > 26 * 3600
         for: 1h
         labels:
           severity: critical
         annotations:
-          summary: "{{ $labels.server }}: no good incremental backup for over a day"
+          summary: "{{ $labels.server }}: no good backup of any kind for over a day"
           description: >-
             This is the one that catches a cron that stopped firing, which no
-            amount of watching the backup output would reveal.
+            amount of watching the backup output would reveal. NoRecentFullBackup
+            still watches the monthly one separately: a chain of dailies on an
+            ageing base is a different failure, and this rule would not see it.
 
       # Full backups run on the 1st, so anything past 40 days means a monthly
-      # run was missed entirely.
+      # run was missed entirely. A server that has never had one publishes a
+      # timestamp of 0 and so fires immediately, which is the intended reading:
+      # "no good full backup" is truer of never than of 41 days ago.
       - alert: NoRecentFullBackup
         expr: >-
           time() - stack_backup_last_success_timestamp_seconds{mode="full"}
