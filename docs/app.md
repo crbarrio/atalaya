@@ -2,16 +2,9 @@
 
 The monorepo itself: backend, frontend, and what is built so far.
 
-## Pending
-
-Nothing outstanding. Every `stack` operation that has a place in a panel now has one.
-
-## Decisions, not pending work
-
-- **The SSH client does not verify host keys.** Over Tailscale the transport is already
-  authenticated end to end by WireGuard, so impersonating a node means having compromised it
-  first. A deliberate omission, not an oversight — but one to revisit before anything runs
-  outside the tailnet.
+Anything deferred or decided against is in the [decision log](decisions/INDEX.md), not here.
+The one that concerns this code directly: the SSH client does not verify host keys, on purpose —
+[decisions/ssh-host-keys-2026-09-08.md](decisions/ssh-host-keys-2026-09-08.md).
 
 ## Done
 
@@ -31,7 +24,7 @@ Nothing outstanding. Every `stack` operation that has a place in a panel now has
       webhook → healthchecks.io ping received. See *Alertmanager + watchdog* in
       [monitoring.md](monitoring.md).
 - [x] `deploy/` replaced by `infra/homeserver/atalaya/`: atalaya is **not** `stack`-managed — see
-      *Why not `stack`* below.
+      [decisions/deploy-outside-stack-2026-08-19.md](decisions/deploy-outside-stack-2026-08-19.md).
 - [x] **atalaya deployed and live on `homeserver`**: `network_mode: host`, published on the
       tailnet at `https://ubuntu.example-tailnet.ts.net/` via `tailscale serve --bg 4200`.
       `marsella-test` registered (`prisma/seed.ts`) and reading real inventory in production.
@@ -115,7 +108,7 @@ Nothing outstanding. Every `stack` operation that has a place in a panel now has
       and act on different things.
       `actions/` in the backend gates three things before SSH — the command is in the catalogue,
       the instance exists (checked against the cache, refreshed once before giving up, which is
-      PLAN.md's requirement and was until now unimplemented), and no other mutating action holds
+      the plan's requirement and was until now unimplemented), and no other mutating action holds
       that instance. Streaming is `@Sse()` over an Observable wrapping the same `ssh2` exec;
       `nginx.conf` had `proxy_buffering off` waiting for it since the infra reorganisation.
       Output needs real parsing: `stack` colours its output and, under a pty, `docker compose`
@@ -370,8 +363,10 @@ shared/pipes/relative-time.pipe.ts                "2m ago" — every card's answ
 features/overview/server-card/                    one card per server
 features/server-detail/, instance-detail/         detail pages, route-bound via input()
 features/backups/                                 per-server backup status, aggregated
-features/coming-soon/                              honest placeholder — used by `/incidents`
 ```
+
+(`features/coming-soon/` stood in for `/incidents` at the time; the real incident inbox replaced
+it on 2026-08-19 and the directory is gone.)
 
 Visual language borrowed from a Stitch mockup, but only where it could be backed by data that is
 real: aggregate stat tiles (servers / instances / issues) computed from the servers already
@@ -428,7 +423,7 @@ containers, not by inspection.
 ## Full metrics dashboard — working, 2026-08-19
 
 ```
-monitoring/monitoring.queries.ts   the PromQL catalogue PLAN.md asks for, named, nothing loose
+monitoring/monitoring.queries.ts   the PromQL catalogue architecture.md asks for, named, nothing loose
 monitoring/metrics.reader.ts       raw numbers per server/instance/engine container
 monitoring/metrics.service.ts      shapes them: used/total, days-remaining, up/down
 shared/prometheus/prometheus.service.ts  now also wraps /api/v1/alerts, not just /api/v1/query
@@ -446,24 +441,16 @@ tunnel updated the server-detail page (new component, new resource) but left Ove
 resource is a `providedIn: 'root'` singleton, created once). Fixed generally with `pollResource()`
 rather than per-page ad hoc timers.
 
-## Alertmanager + watchdog, and why not `stack` — working, 2026-08-19
+## Alertmanager + watchdog — working, 2026-08-19
 
 Built and verified on `homeserver` — see *Alertmanager + watchdog* and the reorganisation entry in
 [monitoring.md](monitoring.md) for the infra side. On the app side: `POST /api/webhooks/alertmanager`
 (`@Public()`, reachable only from the loopback address it shares with Alertmanager), `Watchdog`
-pinging the URL from `SettingsService` (see *Settings screen* below), everything else upserted
+pinging the URL from `SettingsService` (see *Settings screen* above), everything else upserted
 into `Incident` by Alertmanager's own fingerprint.
 
-**Why not `stack`.** The obvious move once `deploy/`'s Dockerfiles existed was to onboard atalaya
-as just another `stack` instance, the same as `acme` or `vega`. Rejected: `stack` reaches
-every instance through Traefik, by domain, over its own isolated Docker network — a completely
-different exposure model from atalaya's, which is `tailscale serve` injecting
-`Tailscale-User-Login` straight to a process bound to the host's real loopback. Putting atalaya
-behind `stack` would reintroduce the exact container-can't-reach-host-loopback problem
-`network_mode: host` was built to solve for Prometheus and Alertmanager, and would mean giving up
-the tailnet-only identity model for a public-domain one. `deploy/` is gone; `infra/homeserver/atalaya/`
-replaces it. No registry push, no CI pipeline putting atalaya through `stack`'s `ghcr.io` flow: the
-repo is cloned on `homeserver` and built there — see *One install process* below.
+The same day settled that atalaya is deployed as a clone on `homeserver`, not as a `stack`
+instance: [decisions/deploy-outside-stack-2026-08-19.md](decisions/deploy-outside-stack-2026-08-19.md).
 
 ## Server registration — working, 2026-08-19
 

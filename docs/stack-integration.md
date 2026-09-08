@@ -3,10 +3,8 @@
 Everything atalaya needs from `stack`, and the changes made there. The repo itself is at
 `../stack`.
 
-## Pending
-
-Nothing. Deploying atalaya itself is **not** pending: it is a clone and three compose commands,
-decided already. See *Why not `stack`* in [app.md](app.md).
+atalaya itself is not a `stack` instance and will not become one:
+[decisions/deploy-outside-stack-2026-08-19.md](decisions/deploy-outside-stack-2026-08-19.md).
 
 ## Done
 
@@ -266,11 +264,14 @@ No wildcard, so sudo has no pattern to match wrong. The allowlist lives in a fil
 cannot write, rather than in sudoers globs — historically a rich source of privilege escalation —
 or in atalaya's own code, where a bug would widen what the server accepts.
 
-Allowed: `status`, `versions` (optionally `--json`), `logs`, `deploy` (optionally
-`--version <tag>`), `rollback`, `start`, `stop`, `backup {full|incremental}`. Instance names and
-tags must match `^[a-z0-9][a-z0-9._-]*$`; arguments are forwarded as an array, never re-split
-from a string. Each flag is accepted only on the subcommand that takes it — `logs --json` and
-`versions --dry-run` are both refused.
+Allowed today: `status`, `versions` (optionally `--json`), `logs`, `deploy` (optionally
+`--version <tag>`), `rollback`, `start`, `stop`, `backup {full|incremental}`, `retire`
+(optionally `--with-data`), `add` with its declaration flags, and `secrets {--json|--set}`. The
+list is the `case` in the dispatcher heredoc of `setup-server.sh`, and `ssh-commands.ts` mirrors
+it on this side. Instance names and tags must match `^[a-z0-9][a-z0-9._-]*$`; arguments are
+forwarded as an array, never re-split from a string. Each flag is accepted only on the subcommand
+that takes it — `logs --json` and `versions --dry-run` are both refused. The paragraphs below
+record how the later entries arrived and why each is shaped as it is.
 
 `versions --json` exists for the same reason `inventory` does. The printed form is prose with
 ANSI and unicode in it, and the panel needs three things from it: which versions are published,
@@ -279,7 +280,7 @@ which is running, and which one a bare `deploy` would pick — that last being t
 change. The JSON rows are collected while that output is produced, so the two cannot disagree.
 
 **`exec` is absent and must stay absent.** `stack exec` is `docker compose exec <svc>
-<command...>` — a remote shell, which is the one thing PLAN.md prohibits outright. `engine` is
+<command...>` — a remote shell, which is the one thing [architecture.md](architecture.md) prohibits outright. `engine` is
 absent too: one unqualified word acts on every instance at once.
 
 `retire` was absent when this was written and is present now, in **both** its forms — including

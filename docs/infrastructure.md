@@ -3,10 +3,6 @@
 The machines, the tailnet, and how atalaya reaches them. Facts about the estate, not about the
 application.
 
-## Pending
-
-Nothing outstanding.
-
 ## The fleet
 
 Checked over SSH on 2026-08-17:
@@ -81,7 +77,7 @@ process group and every viewer who walked away left a follower running. Verified
 | Read `secrets/acme.env` | `Permission denied` |
 | `sudo -n id` | `a password is required` |
 | `sudo -n -u ubuntu id` | `a password is required` — the rule is bound to the dispatcher, not the user |
-| `atalaya-stack exec …` | refused; so are `retire`, `add` and metacharacters in a name |
+| `atalaya-stack exec …` | refused; so are `engine`, metacharacters in a name, and every malformed shape of `retire`, `add` and `secrets` — `setup-server.sh --check` asserts each |
 | Same key over the public hostname | `Permission denied (publickey)` |
 
 That last row is the point: SSH-over-Tailscale stops being an intention and becomes an enforced
@@ -118,26 +114,9 @@ on its own.
 A separate disk on purpose: if metrics run away, they fill their own disk without taking down the
 system of the machine that runs the household DNS, Plex and Home Assistant.
 
-## Accepted — `madrid-prod` connects via relay
+## Routes
 
-Tailscale first attempts a **direct** connection between nodes, punching through each side's NAT
-over UDP/41641. Failing that, it falls back to **DERP**, Tailscale's relay network: an outbound
-TCP connection that always works. Encryption remains end to end with WireGuard — the relay moves
-packets it cannot read — so this is not a security matter, only latency and shared bandwidth.
-
-The punch-through is not instantaneous. All three nodes started on DERP; ten minutes later:
-
-| Node | Route | Latency from homeserver |
-|---|---|---|
-| `madrid-prod` | relay `mad` | 11 ms |
-| `marsella-prod` | direct `203.0.113.11:41641` | 10 ms (was 113 ms) |
-| `marsella-test` | direct `203.0.113.12:41641` | 10 ms (was 45 ms) |
-
-`madrid-prod` stayed on the relay. Unverified hypothesis: its Oracle Cloud security list does not
-admit inbound UDP on 41641. **Deliberately not investigated, and closed rather than left
-pending** — at 11 ms it affects nothing. Metric scraping never noticed, and Phase 3's log
-streaming was verified over this very relay: 200 lines of a live `stack logs` from `madrid-prod`,
-with no perceptible lag.
-
-If it ever does matter: `tailscale status` distinguishes `direct` from `relay "xxx"`, and
-`tailscale ping <ip>` reports which route each packet takes.
+`marsella-prod` and `marsella-test` reach `homeserver` directly; `madrid-prod` goes through a
+DERP relay at 11 ms, which was examined and accepted:
+[decisions/madrid-prod-relay-2026-08-17.md](decisions/madrid-prod-relay-2026-08-17.md).
+`tailscale status` shows which is which.

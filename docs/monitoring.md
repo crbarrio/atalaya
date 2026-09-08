@@ -3,14 +3,10 @@
 Collectors, Prometheus and alerting: everything that produces or stores metrics. The application
 that displays them is in [app.md](app.md).
 
-## Pending
-
-Nothing outstanding.
-
 There is deliberately **no bypass route** — no static `alertmanager.yml` route around atalaya for
-Telegram or anything else. Reasoning in *Why there is no bypass route* in [PLAN.md](PLAN.md).
-Telegram itself is not excluded: it is a channel *through* atalaya, same as email (see Done
-below) — exactly what the plan calls for.
+Telegram or anything else. Reasoning in *Why there is no bypass route* in
+[architecture.md](architecture.md). Telegram itself is not excluded: it is a channel *through*
+atalaya, same as email (see Done below).
 
 ## Runbook
 
@@ -129,7 +125,7 @@ permanently by design. If it stops, healthchecks.io reports it from outside — 
       just `{ botToken, chatId }`, `sendMessage` for delivery — the adapter interface built generic
       from the start meant no changes anywhere else, only a `type` selector on the frontend form
       swapping which fields show.
-- [x] **Both `stack` changes named in PLAN.md's "Changes to the `stack` repo" — 2026-08-23**: the
+- [x] **Both `stack` changes named in the plan's "Changes to the `stack` repo" — 2026-08-23**: the
       backup-metrics half (`stack_backup_*.prom`) already existed; the deployed-version half did
       not. Added `write_deploy_metric()` to `stack` (the CLI, not `backup.sh`): one `.prom` file
       per instance, `stack_deploy_info{app,version} 1` (an info-metric — the version travels as a
@@ -137,8 +133,8 @@ permanently by design. If it stops, healthchecks.io reports it from outside — 
       from `cmd_deploy` on every successful deploy, which covers `cmd_start` and `cmd_rollback`
       too since both call `cmd_deploy` internally — one insertion point, three commands covered.
       `cmd_retire` deletes the file on the way out, so a retired instance does not leave a ghost
-      series behind. Nothing queries this yet — see *Deployment history screen* in Pending; the
-      metric was the half of this that PLAN.md's own checklist was missing.
+      series behind. The instance page draws it — see *Historical charts and deployment history*
+      below; the metric was the half of this that the plan's own checklist was missing.
 - [x] **First-deploy backup seeding — 2026-08-23**: found while adding a new app (`pulsar`) to
       `stack` on `develop` — its first backup after deploy failed because incremental mode diffs
       against a previous snapshot and a brand-new instance has none, and `backup.sh` `die()`s on
@@ -163,7 +159,7 @@ permanently by design. If it stops, healthchecks.io reports it from outside — 
       first/last timestamp *is* the history — no separate event log needed. Charting library:
       **Chart.js via `ng2-charts`** (`provideCharts(withDefaultRegisterables())` in
       `app.config.ts`) over building from scratch — matches "no Grafana in the product, our own UI"
-      from PLAN.md; it is a drawing library, not a dashboard platform. `HistoryChart`
+      from [architecture.md](architecture.md); it is a drawing library, not a dashboard platform. `HistoryChart`
       (`shared/ui/history-chart/`) renders CPU/RAM/disk on one 0–100% axis with a 24h/7d/30d
       selector on the server page, peaks computed in TypeScript (`Math.max`) and shown as text
       rather than pulling in `chartjs-plugin-annotation` for one number. `DeployHistory`
@@ -259,7 +255,7 @@ permanently by design. If it stops, healthchecks.io reports it from outside — 
       volume churns and breaks `predict_linear`, a Prometheus data disk sits near 88% by its own
       retention cap and trips the threshold. **Suppressed at the webhook, not in the rule file**:
       alert configuration belongs in the database and the UI for the same reason routing does
-      (see *Where the configuration lives* in [PLAN.md](PLAN.md)), and excluding mountpoints in
+      (see *Where the configuration lives* in [architecture.md](architecture.md)), and excluding mountpoints in
       YAML would bury the decision where nobody edits it. Prometheus still evaluates the rule; it
       just does not become an incident. `DiskAlertPreference` holds a row only once something is
       switched off, so a newly added disk alerts without anyone configuring it.
@@ -268,27 +264,15 @@ permanently by design. If it stops, healthchecks.io reports it from outside — 
       perfectly. And `host` servers counted as backup failures on the Overview and Backups
       screens, since a null backup status read as "never ran" rather than "not applicable".
 
-## Backups are server-wide, not per-app — 2026-08-23
+## Backup status is server-wide, not per-app
 
-Deploying `pulsar` surfaced the real complaint: atalaya's "backup failed" says nothing about
-*which* app or *why*. Investigated turning that into a per-instance status before touching
-anything, because the fix above only closes the one specific failure mode (a new instance with no
-prior snapshot) — it does nothing for atalaya's diagnostic message in general.
+`backup.sh` writes one `last_status` for the whole run, the metrics carry no instance label, and
+`stack inventory` reports `backup` beside `instances[]`, not inside each. Whether to change that
+is an open item: [decisions/backups-per-app-2026-08-23.md](decisions/backups-per-app-2026-08-23.md).
 
-What `stack` actually reports today is server-wide, at every layer: `backup.sh` writes one
-`last_status` file for the whole run, `die()` on any instance's failure aborts the *entire* run
-rather than just that instance (so a bad instance mid-loop can silently skip every instance after
-it too), the Prometheus metrics (`stack_backup_success{mode}`) carry no instance label, and
-`stack inventory`'s `backup` field sits at the top level of the JSON, a sibling of `instances[]`,
-not nested inside each one. There is no per-instance signal anywhere to surface.
+## First run of the artifact on `marsella-test` — 2026-08-18
 
-Making it per-instance would mean `backup.sh` catching a failure and continuing to the next
-instance instead of dying, a status recorded per instance instead of one shared file, metrics
-labelled by instance, and `stack inventory` moving `backup` inside each `StackInstance`. Real
-work, and explicitly **not done here** — deliberately scoped out for now in favour of the smaller
-fix above, which was the actual trigger. Revisit if "which app, and why" keeps coming up.
-
-First real run of the artifact. Verified from `homeserver` over the tailnet, not just locally:
+Verified from `homeserver` over the tailnet, not just locally:
 
 - `node_exporter`: 3748 host metrics, `node_textfile_scrape_error 0`.
 - `cAdvisor` `v0.52.1`: 22 containers measured, container `healthy`.
