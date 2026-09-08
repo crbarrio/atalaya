@@ -76,12 +76,5 @@ atalaya then verifies the result. It generates and checks; it never installs any
 
 ## Documentation
 
-Each file carries its own **Pending** list at the top and the log of what was done below it.
-
-| File | What is in it |
-|---|---|
-| [PLAN.md](docs/PLAN.md) | The plan of record: decisions, architecture, security constraints, phases. |
-| [infrastructure.md](docs/infrastructure.md) | The machines: tailnet, resources, disks, ports, SSH. |
-| [monitoring.md](docs/monitoring.md) | Collectors, Prometheus, alerting, and the runbook. |
-| [stack-integration.md](docs/stack-integration.md) | The `stack inventory` contract and the changes made there. |
-| [app.md](docs/app.md) | The monorepo: backend, frontend, and the modules built so far. |
+[docs/README.md](docs/README.md) is the index: reference on one side, the decision log (with
+what is open) on the other. Working conventions for the repo are in `CLAUDE.md`.

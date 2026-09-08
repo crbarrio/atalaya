@@ -1,6 +1,6 @@
-# Certificate expiry — the last of the four things *Phase 2* in PLAN.md
-# names for the incident inbox to unify: capacity, downed services,
-# certificates, backups.
+# Certificate expiry — the last of the four things the plan's Phase 2
+# (docs/decisions/plan-phases-2026-08-17.md) names for the incident inbox to
+# unify: capacity, downed services, certificates, backups.
 #
 # Traefik does not publish this itself (no cert-expiry metric in any current
 # version, and its Prometheus metrics are not even enabled in `stack`'s

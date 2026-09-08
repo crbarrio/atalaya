@@ -12,7 +12,7 @@ export interface AuditRecord {
 }
 
 /**
- * Writes the record of every action that had an effect. PLAN.md's "every
+ * Writes the record of every action that had an effect. architecture.md's "every
  * action with an effect is recorded" — the table has existed since the first
  * migration and this is its first writer.
  *

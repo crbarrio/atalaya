@@ -5,7 +5,8 @@ import { RelativeTimePipe } from '../../shared/pipes/relative-time.pipe';
 import { MetaChip } from '../../shared/ui/meta-chip/meta-chip';
 
 /**
- * PLAN.md asks for the last full AND the last incremental backup per server.
+ * The plan (docs/decisions/plan-phases-2026-08-17.md, Phase 1) asks for the last
+ * full AND the last incremental backup per server.
  * What is actually available today is a single "last run, whichever mode"
  * status from `stack inventory` — `backup.sh` overwrites one status file
  * regardless of mode. The two modes DO exist as separate Prometheus series

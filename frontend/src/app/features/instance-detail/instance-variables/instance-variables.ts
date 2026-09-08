@@ -10,7 +10,7 @@ import { valueOr } from '../../../shared/resource-value';
  * The variables of one instance: which it declares, which are set, and the way
  * to change them.
  *
- * Write-only, as PLAN.md requires. A value is typed in and sent; it is never
+ * Write-only, as architecture.md requires. A value is typed in and sent; it is never
  * fetched, never rendered, and the input starts empty every time — there is
  * nothing to prefill it with, because nothing on this side ever knew it.
  *

@@ -16,7 +16,7 @@ const MUTABLE_DISK_ALERTS: Record<string, 'trendAlerts' | 'capacityAlerts' | und
 /**
  * `Watchdog` is a heartbeat, not something to show in an inbox: it is pulled
  * out and pinged to healthchecks.io instead of becoming an Incident row. See
- * *Watching the watchman* in PLAN.md.
+ * *Watching the watchman* in architecture.md.
  */
 @Injectable()
 export class WebhooksService {

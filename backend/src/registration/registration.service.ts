@@ -16,7 +16,7 @@ export class RegistrationService {
 
   /**
    * Only the registry row and the regenerated target files — this never
-   * touches the server itself. See *Server registration* in PLAN.md: atalaya
+   * touches the server itself. See *Server registration* in architecture.md: atalaya
    * generates and verifies, a person runs the artifact.
    *
    * `host` is the tailnet IP, always: SSH stays on the tailnet, which is

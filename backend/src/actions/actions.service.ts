@@ -213,7 +213,7 @@ export class ActionsService {
 
   /**
    * Server, instance and target. The instance is checked against the cached
-   * `Instance` table — PLAN.md requires a made-up name be rejected before SSH
+   * `Instance` table — architecture.md requires a made-up name be rejected before SSH
    * is touched. The cache can lag a freshly added instance, so a miss triggers
    * one refresh and a re-check before giving up.
    */

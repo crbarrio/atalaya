@@ -1,5 +1,5 @@
 /**
- * Every PromQL string the backend runs, named and in one place — PLAN.md
+ * Every PromQL string the backend runs, named and in one place — architecture.md
  * asks for a catalogue rather than loose queries reaching the frontend.
  * `instance` is always `<tailnetIp>:<port>`, matching the `instance` label
  * Prometheus attaches from `targets/*.json`.

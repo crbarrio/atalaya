@@ -2,7 +2,7 @@
 # have stopped three days ago. `vector(1)` is always true, so this alert is
 # permanently firing — Alertmanager forwards it as a steady heartbeat through
 # atalaya to healthchecks.io, an external watchman. See *Watching the
-# watchman* in PLAN.md.
+# watchman* in architecture.md.
 
 groups:
   - name: watchdog

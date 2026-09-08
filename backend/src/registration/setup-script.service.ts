@@ -19,7 +19,7 @@ const TEMPLATE_PATH =
 /**
  * Personalises `setup-server.sh` for one server: the IP, the labels, the
  * ports are already inside the download — see *Server registration* in
- * PLAN.md. Done by replacing the script's own `--- Defaults ---` assignments
+ * architecture.md. Done by replacing the script's own `--- Defaults ---` assignments
  * rather than appending flags, so running it needs no arguments at all.
  */
 @Injectable()
