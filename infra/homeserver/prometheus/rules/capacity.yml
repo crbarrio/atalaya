@@ -37,10 +37,15 @@ groups:
           severity: warning
         annotations:
           summary: "{{ $labels.server }}: {{ $labels.mountpoint }} fills within 4 days"
+          # `$value` is what the expression returned — the PROJECTION four days
+          # out, not the space free today. Read as "currently free" it is
+          # nonsense: every disk incident in the history showed a negative
+          # figure there, on disks that had hundreds of gigabytes left.
           description: >-
             At the rate of the last 6 hours, {{ $labels.mountpoint }} on
-            {{ $labels.server }} runs out of space in under 4 days.
-            Currently {{ $value | humanize1024 }}B free.
+            {{ $labels.server }} runs out of space in under 4 days. The 4-day
+            projection is {{ $value | humanize1024 }}B free — negative is the
+            size of the shortfall, not what is left now.
 
       # The blunt backstop, for when growth is sudden rather than gradual and
       # the projection has not caught up.
