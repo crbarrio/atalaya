@@ -45,6 +45,8 @@ MODE="setup"                        # setup | check | uninstall
 NODE_PACKAGE="prometheus-node-exporter"
 NODE_DEFAULTS="/etc/default/prometheus-node-exporter"
 NODE_SERVICE="prometheus-node-exporter"
+NODE_DROPIN="/etc/systemd/system/prometheus-node-exporter.service.d/atalaya-tailnet.conf"
+WAIT_HELPER="/usr/local/lib/atalaya/wait-for-address"
 CADVISOR_CONTAINER="atalaya-cadvisor"
 
 CHANGES=0
@@ -253,18 +255,119 @@ ARGS="${args}"
 CONF
 )
 
+  local restart_needed=0
+
   if write_if_changed "$NODE_DEFAULTS" "$content"; then
     changed "configuration written to $NODE_DEFAULTS"
-    systemctl restart "$NODE_SERVICE"
-    changed "service restarted"
+    restart_needed=1
   else
     info "configuration already correct"
   fi
 
+  install_node_exporter_ordering && restart_needed=1
+
+  # A unit that exhausted the old start limit stays `failed` and refuses to
+  # start until the counter is cleared. That is the state marsella-prod was
+  # found in, so re-running this script has to be enough to get out of it.
+  systemctl reset-failed "$NODE_SERVICE" 2>/dev/null || true
   systemctl enable --quiet "$NODE_SERVICE" 2>/dev/null || true
-  systemctl is-active --quiet "$NODE_SERVICE" || systemctl start "$NODE_SERVICE"
+
+  if [[ $restart_needed -eq 1 ]]; then
+    systemctl restart "$NODE_SERVICE"
+    changed "service restarted"
+  else
+    systemctl is-active --quiet "$NODE_SERVICE" || systemctl start "$NODE_SERVICE"
+  fi
 
   ok "node_exporter listening on ${TAILNET_IP}:${NODE_PORT}"
+}
+
+# node_exporter binds the tailnet address and nothing else, and that address
+# does not exist until tailscaled has brought the interface up. On the reboot
+# of 2026-09-09 marsella-prod lost that race: five `bind: cannot assign
+# requested address` failures inside one second exhausted systemd's default
+# start limit, and the unit stayed down for good — no further retry is ever
+# scheduled once the burst is spent. cAdvisor came through the same race only
+# because Docker retries a container without a burst limit.
+#
+# What made it expensive is what did NOT fire afterwards. With the collector
+# gone the server publishes no series at all, and the backup, disk and RAM
+# rules evaluate over series that are simply absent, so none of them can alert.
+# Nine hours of a client-carrying server unwatched, with a single TargetDown to
+# say so — and TargetDown's own wording invites reading it as "the server is
+# unreachable", which it was not.
+#
+# Returns 0 when something changed, so the caller restarts.
+install_node_exporter_ordering() {
+  local changed_here=0 helper dropin
+
+  # systemd can order a unit after tailscaled, but not after an address
+  # exists — and tailscaled being active is not the same thing. Hence a wait
+  # rather than a dependency alone. Written as a file instead of an inline
+  # ExecStartPre because systemd expands `$` in unit lines and a shell loop
+  # there would be silently mangled.
+  helper=$(cat <<'HELPER'
+#!/bin/sh
+# Managed by atalaya (infra/fleet/server-setup/setup-server.sh).
+# Hand edits are lost on the next run.
+#
+# Blocks until this machine actually holds the address given up to a limit,
+# then gives up loudly. See install_node_exporter_ordering in the script above.
+set -eu
+
+address="${1:?usage: wait-for-address ADDRESS [seconds]}"
+limit="${2:-60}"
+waited=0
+
+while [ "$waited" -lt "$limit" ]; do
+  if ip -4 addr show to "$address" 2>/dev/null | grep -q 'inet '; then
+    exit 0
+  fi
+  sleep 1
+  waited=$((waited + 1))
+done
+
+echo "wait-for-address: $address never appeared after ${limit}s" >&2
+exit 1
+HELPER
+)
+
+  if write_if_changed "$WAIT_HELPER" "$helper" 0755; then
+    changed "address-wait helper written to $WAIT_HELPER"
+    changed_here=1
+  else
+    info "address-wait helper already in place"
+  fi
+
+  dropin=$(cat <<CONF
+# Managed by atalaya (infra/fleet/server-setup/setup-server.sh).
+# Hand edits are lost on the next run.
+#
+# Without this the service races tailscaled on every reboot, and losing the
+# race once is permanent: the default start limit spends itself in under a
+# second and systemd never tries again. The reasoning is in the script.
+[Unit]
+After=tailscaled.service
+Wants=tailscaled.service
+# A dependency that is merely late is not a reason to stop trying.
+StartLimitIntervalSec=0
+
+[Service]
+ExecStartPre=${WAIT_HELPER} ${TAILNET_IP} 60
+Restart=always
+RestartSec=5s
+CONF
+)
+
+  if write_if_changed "$NODE_DROPIN" "$dropin"; then
+    changed "start ordered after the tailnet address exists ($NODE_DROPIN)"
+    systemctl daemon-reload
+    changed_here=1
+  else
+    info "start already ordered after the tailnet address exists"
+  fi
+
+  [[ $changed_here -eq 1 ]]
 }
 
 # --- cAdvisor --------------------------------------------------------------
@@ -735,6 +838,17 @@ verify() {
     failures=$((failures + 1))
   fi
 
+  # Responding now says nothing about surviving a reboot, which is exactly how
+  # this was missed: the race is invisible while the machine is up. Checked
+  # here so a server set up before the drop-in existed is caught on the next
+  # run rather than on its next restart.
+  if [[ -f $NODE_DROPIN ]] && [[ -x $WAIT_HELPER ]]; then
+    ok "node_exporter start waits for the tailnet address"
+  else
+    fail "node_exporter would race tailscaled on the next reboot and stay down for good"
+    failures=$((failures + 1))
+  fi
+
   # The check that was missing, and that a whole class of silent failure hides
   # behind: stack writes its metrics here as $STACK_OWNER, from cron, with the
   # output discarded.
@@ -949,6 +1063,15 @@ uninstall() {
     changed "$NODE_PACKAGE removed"
   else
     info "node_exporter was not installed"
+  fi
+
+  # A drop-in outlives the package it overrides: purging leaves the directory
+  # behind, and a later reinstall would silently inherit it.
+  if [[ -f $NODE_DROPIN || -f $WAIT_HELPER ]]; then
+    rm -f "$NODE_DROPIN" "$WAIT_HELPER"
+    rmdir --ignore-fail-on-non-empty "$(dirname "$NODE_DROPIN")" "$(dirname "$WAIT_HELPER")" 2>/dev/null || true
+    systemctl daemon-reload
+    changed "start-ordering drop-in and its helper removed"
   fi
 
   # The dispatcher and its sudo rule DO go: they are a granted privilege, and
