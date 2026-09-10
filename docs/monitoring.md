@@ -263,6 +263,23 @@ permanently by design. If it stops, healthchecks.io reports it from outside — 
       machine is Pi-hole — it answered 404 and the container reported `unhealthy` while scraping
       perfectly. And `host` servers counted as backup failures on the Overview and Backups
       screens, since a null backup status read as "never ran" rather than "not applicable".
+- [x] **`node_exporter` no longer races `tailscaled` at boot — 2026-09-10**: the collectors bind
+      the tailnet address only, which does not exist until `tailscaled` has brought the interface
+      up. `marsella-prod` lost that race on a reboot, failed to bind five times inside one second,
+      spent systemd's default start limit and stayed down permanently — a burst, once exhausted,
+      schedules no further retry. cAdvisor survived the identical race purely because Docker
+      retries a container without a burst limit. `install_node_exporter_ordering()` in
+      `infra/fleet/server-setup/setup-server.sh` writes a drop-in: `After=tailscaled.service`,
+      `StartLimitIntervalSec=0`, and an `ExecStartPre` that waits for the address itself, since
+      ordering alone would not do — `tailscaled` being active is not the address being assigned.
+      The wait is a script on disk (`/usr/local/lib/atalaya/wait-for-address`) because systemd
+      expands `$` in unit lines and mangles an inline shell loop silently. `verify()` checks for
+      the drop-in, which is the part that matters: the race is invisible while the machine is up.
+      Applied to all three fleet servers; both branches of the wait exercised on a real machine.
+      **What it cost is the lesson**: with the collector gone the server published nothing, and
+      every backup, disk and memory rule evaluates over series that were simply absent, so none
+      of them could fire. See
+      [decisions/collector-boot-race-2026-09-10.md](decisions/collector-boot-race-2026-09-10.md).
 
 ## Backup status is server-wide, not per-app
 
