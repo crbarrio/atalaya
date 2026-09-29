@@ -178,7 +178,10 @@ The one that concerns this code directly: the SSH client does not verify host ke
       stay when Prometheus does not. The domains are not typed into atalaya: `stack inventory`
       reports them as `managers` and the refresh stores them in `Server.phpmyadminDomain` /
       `adminerDomain`, so the link is whatever Traefik actually routes. Nothing shows for a
-      manager left unpublished, or while the server's `stack` predates the field.
+      manager left unpublished, or while the server's `stack` predates the field. Verified on all
+      three `stack` servers: a pull is not enough, since `inventory` never rewrites the manifest —
+      each needed one merging command (`stack status`) before reporting its domains. All six
+      answered 200. The links hold with Prometheus unreachable and at 375 px.
 
 ## Creating an instance — 2026-08-30
 
