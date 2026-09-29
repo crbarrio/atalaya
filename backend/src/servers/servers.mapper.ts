@@ -17,6 +17,8 @@ interface ServerRow {
   lastBackupAt: string | null;
   lastBackupMode: string | null;
   lastBackupDetail: string | null;
+  phpmyadminDomain: string | null;
+  adminerDomain: string | null;
 }
 
 interface InstanceRow {
@@ -62,6 +64,10 @@ export function toServerView(
       at: server.lastBackupAt,
       mode: server.lastBackupMode,
       detail: server.lastBackupDetail,
+    },
+    managers: {
+      phpmyadmin: server.phpmyadminDomain,
+      adminer: server.adminerDomain,
     },
     counts: countStates(instances),
   };

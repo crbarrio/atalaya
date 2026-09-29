@@ -43,6 +43,11 @@ atalaya itself is not a `stack` instance and will not become one:
 - [x] `add --json` prints only the plan. `psql` narrates what it did — `DO`, `CREATE DATABASE` —
       and those lines went to stdout in front of the JSON, so the one caller that reads that
       contract parsed them and got nothing. Moved to stderr, not silenced.
+- [x] `inventory` reports `managers: {phpmyadmin, adminer}`, the domains `PMA_DOMAIN` and
+      `ADMINER_DOMAIN` publish, `null` each when unset. They live in the `.env`, so `merge.py`
+      copies them into the manifest as `_managers`, the same way and for the same reason as
+      `_server`. A manifest written before this reads as both `null` until any merging `stack`
+      command runs; atalaya treats a missing `managers` the same way.
 
 ## The declaration is machine state — 2026-08-30
 

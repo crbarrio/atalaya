@@ -23,6 +23,8 @@ export class InventoryRepository {
           lastBackupAt: inventory.backup?.at ?? null,
           lastBackupMode: inventory.backup?.mode ?? null,
           lastBackupDetail: inventory.backup?.detail ?? null,
+          phpmyadminDomain: inventory.managers?.phpmyadmin ?? null,
+          adminerDomain: inventory.managers?.adminer ?? null,
         },
       });
 

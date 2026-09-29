@@ -152,6 +152,18 @@ export class ServerDetailPage {
     return ENGINE_ORDER.map((service) => byService.get(service)).filter((e) => e !== undefined);
   });
 
+  /**
+   * Links to the database managers this server publishes. They come from the
+   * inventory, not from Prometheus, so they stay up when the metrics do not.
+   */
+  protected readonly managers = computed(() => {
+    const managers = this.server()?.managers;
+    return [
+      { name: 'phpMyAdmin', engine: 'MySQL', domain: managers?.phpmyadmin },
+      { name: 'Adminer', engine: 'Postgres', domain: managers?.adminer },
+    ].filter((m): m is { name: string; engine: string; domain: string } => !!m.domain);
+  });
+
   /** 404 vs. a request that failed outright are different messages. */
   protected readonly notFound = computed(() => {
     const error = this.detail.error() as { status?: number } | undefined;

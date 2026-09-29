@@ -13,7 +13,18 @@ export interface StackInventory {
   /** False when the reading account cannot see the docker socket. */
   containers_observable: boolean;
   backup: StackBackup | null;
+  /** Absent from a `stack` that predates it — read as nothing published. */
+  managers?: StackManagers;
   instances: StackInstance[];
+}
+
+/**
+ * Domains the engine's database managers are published on, from the .env
+ * atalaya cannot read. Null when that manager is not published.
+ */
+export interface StackManagers {
+  phpmyadmin: string | null;
+  adminer: string | null;
 }
 
 export interface StackBackup {

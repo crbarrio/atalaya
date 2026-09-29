@@ -12,7 +12,14 @@ export interface ServerView {
   /** False when the reading account cannot see docker, so state is unknown. */
   containersObservable: boolean;
   backup: ServerBackupView;
+  managers: ServerManagersView;
   counts: InstanceCounts;
+}
+
+/** Domains of phpMyAdmin (MySQL) and Adminer (Postgres); null when not published. */
+export interface ServerManagersView {
+  phpmyadmin: string | null;
+  adminer: string | null;
 }
 
 export type ServerHealth = 'ok' | 'stale' | 'unreachable' | 'never read';

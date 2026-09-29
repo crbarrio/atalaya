@@ -16,7 +16,14 @@ export interface Server {
   /** False when the reading account cannot see docker: every instance state is 'unknown'. */
   containersObservable: boolean;
   backup: ServerBackup;
+  managers: ServerManagers;
   counts: InstanceCounts;
+}
+
+/** Domains of phpMyAdmin (MySQL) and Adminer (Postgres), from stack's .env; null when not published. */
+export interface ServerManagers {
+  phpmyadmin: string | null;
+  adminer: string | null;
 }
 
 export type ServerHealth = 'ok' | 'stale' | 'unreachable' | 'never read';

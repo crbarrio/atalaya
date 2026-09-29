@@ -1,3 +1,5 @@
+import { ServerManagers } from './server.model';
+
 /** Mirrors the backend's `InstanceView`. */
 export interface Instance {
   name: string;
@@ -36,6 +38,7 @@ export interface ServerDetail {
   lastError: string | null;
   containersObservable: boolean;
   backup: { status: string | null; at: string | null; mode: string | null; detail: string | null };
+  managers: ServerManagers;
   counts: { total: number; running: number; unknown: number; down: number };
   instances: Instance[];
 }

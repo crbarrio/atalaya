@@ -173,6 +173,12 @@ The one that concerns this code directly: the SSH client does not verify host ke
       `metrics.value()` in twelve computeds and once in its template, and reading an errored
       resource throws. The same defect as the instance page in August, in the one place the guard
       was not applied — found because retiring an instance navigates here.
+- [x] **Links to phpMyAdmin and Adminer — 2026-09-29**: the server page links to the database
+      managers the server publishes, under the host row and outside the metrics block, so they
+      stay when Prometheus does not. The domains are not typed into atalaya: `stack inventory`
+      reports them as `managers` and the refresh stores them in `Server.phpmyadminDomain` /
+      `adminerDomain`, so the link is whatever Traefik actually routes. Nothing shows for a
+      manager left unpublished, or while the server's `stack` predates the field.
 
 ## Creating an instance — 2026-08-30
 

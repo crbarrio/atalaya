@@ -70,6 +70,13 @@ model Server {
   lastBackupMode   String?
   lastBackupDetail String?
 
+  // ── Database managers, as reported by `stack inventory` ───────────────────
+  /// Domains phpMyAdmin (MySQL) and Adminer (Postgres) are published on, from
+  /// PMA_DOMAIN / ADMINER_DOMAIN in stack's .env. Null when not published —
+  /// or when the server's `stack` predates reporting them.
+  phpmyadminDomain String?
+  adminerDomain    String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

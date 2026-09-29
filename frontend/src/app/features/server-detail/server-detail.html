@@ -97,6 +97,24 @@
       }
     </div>
 
+    @if (managers().length > 0) {
+      <div class="flex flex-wrap items-center gap-2">
+        @for (manager of managers(); track manager.name) {
+          <a
+            href="https://{{ manager.domain }}"
+            target="_blank"
+            rel="noopener"
+            [title]="manager.engine + ' · ' + manager.domain"
+            class="inline-flex items-center gap-1.5 rounded-xs bg-primary/10 px-2 py-1 text-primary text-xs hover:underline"
+          >
+            <span class="material-symbols-outlined text-sm leading-none">database</span>
+            {{ manager.name }}
+            <span class="text-on-surface-variant">{{ manager.engine }}</span>
+          </a>
+        }
+      </div>
+    }
+
     @if (metricsSafe(); as m) {
       <section class="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <app-usage-bar
