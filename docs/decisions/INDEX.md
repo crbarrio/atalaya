@@ -5,7 +5,7 @@ is right. **Open** is what is pending in this repository; there is no other list
 
 | Document | Type | State | Topic |
 |---|---|---|---|
-| [database-reset-2026-10-09.md](database-reset-2026-10-09.md) | decision | **open** | Resetting an instance's database from the panel: a MySQL schema step in `deploy`, `db-reset`, `db-load`. |
+| [database-reset-2026-10-09.md](database-reset-2026-10-09.md) | decision | **open** | Resetting an instance's database from the panel: a MySQL schema step in `deploy`, `db-reset`, `db-load`. Also the other database tools weighed. |
 | [backups-per-app-2026-08-23.md](backups-per-app-2026-08-23.md) | analysis | **open** | Backup status is one value per server; per-app would touch `backup.sh`, the metrics and `inventory`. |
 | [ssh-host-keys-2026-09-08.md](ssh-host-keys-2026-09-08.md) | decision | **open** | The SSH client skips host-key verification; must change before anything runs off the tailnet. |
 | [collector-boot-race-2026-09-10.md](collector-boot-race-2026-09-10.md) | analysis | **open** | `node_exporter` lost a boot race and stayed down; whether absent series should alert is undecided. |
