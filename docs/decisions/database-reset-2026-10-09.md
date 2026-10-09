@@ -15,6 +15,8 @@
 | 5. What is deliberately left out | closed · 2026-10-09 |
 | 6. Verification | open |
 | 7. What the code already offers | closed · 2026-10-09 |
+| 8. Until it is built | closed · 2026-10-09 |
+| 9. Other database tools weighed | open |
 
 ## 1. What surfaced it · CLOSED 2026-10-09
 
@@ -117,3 +119,44 @@ Built in another environment, because this one cannot reach `marsella-test`.
 - **The allowlist** gains two entries in `backend/src/shared/ssh/ssh-commands.ts` and two cases
   in `infra/fleet/server-setup/setup-server.sh`, next to `retire`. `dbLoad` is the second command
   after `secretsSet` whose payload travels on stdin; its size limit has to be decided there.
+
+## 8. Until it is built · CLOSED 2026-10-09
+
+What resets a database today without retiring anything, using the managers the server page
+already links to:
+
+1. Stop the instance from atalaya, so nothing writes while the tables go.
+2. In Adminer (Postgres) or phpMyAdmin (MySQL), drop every table, not the database: dropping the
+   database would also lose the grants its user has on it.
+3. **Postgres with Prisma** (`compas`): deploy from atalaya. `migrate` runs on the empty
+   database and rebuilds the whole schema. **MySQL**: import the app's template, or a dump with
+   data, through the manager's import screen. Its upload size limit can get in the way of a large
+   dump.
+4. Start or deploy from atalaya.
+
+Not through `retire --with-data` + `add`: see section 5.
+
+## 9. Other database tools weighed · OPEN
+
+Discussed in the same session, before the reset became the concrete need. None is decided; each
+is a candidate, ordered by cost.
+
+- **A link from the instance page straight to its database.** The inventory already carries
+  `database: {engine, name}` per instance, so the server page's phpMyAdmin/Adminer link could open
+  the instance's database instead of the login screen. No change in `stack`. Unverified: whether
+  each manager honours a `db=` parameter after its login has to be checked on `marsella-test`.
+- **Read-only facts per database.** Size, table count, open connections, on the instance page.
+  Needs a new `read` contract in `stack` (something like `db-info --json`).
+- **Every database in the engine, on the server page, with the instance that owns it.** The value
+  is the orphans: `retire` without `--with-data` leaves the database behind on purpose, and nothing
+  in the panel says it is still there taking disk. The `wnikani`/`wanikani` mismatch recorded in
+  [stack-integration.md](../stack-integration.md) is the kind of thing it would also surface.
+  Shares the contract above.
+- **Restoring a database from a backup.** `RESTORE.md` in `stack` is a manual procedure today.
+  It would sit in the danger zone with the same gate as `retire --with-data`. Overlaps with
+  `db-load` in section 3, which may make it a variant of that rather than its own command.
+- **Rotating the database user's password.** `ALTER USER` and the instance's secrets file
+  rewritten together, the value on stdin, then a deploy.
+
+Not on the catalogue page (`/apps`): a database always belongs to an instance on one server, and
+that page describes an application independently of where it runs.
