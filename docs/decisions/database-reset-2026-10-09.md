@@ -14,6 +14,7 @@
 | 4. Where a MySQL template lives | open |
 | 5. What is deliberately left out | closed · 2026-10-09 |
 | 6. Verification | open |
+| 7. What the code already offers | closed · 2026-10-09 |
 
 ## 1. What surfaced it · CLOSED 2026-10-09
 
@@ -93,3 +94,26 @@ Checking each MySQL app's Dockerfile is the first step.
 
 On `marsella-test`: a reset of `compas` (Postgres, rebuilt by `migrate`), a reset of a MySQL app
 (rebuilt from its template), a load of a dump, and the refusal when the pre-reset dump fails.
+
+## 7. What the code already offers · CLOSED 2026-10-09
+
+Read in `stack` while designing, so the next session starts from it rather than from scratch.
+Built in another environment, because this one cannot reach `marsella-test`.
+
+- **The dump before the reset exists already**: `backup_db` in `stack` writes
+  `backups/<instance>/pre-<version>.sql.gz` and checks it three ways (gzip, the engine's end marker,
+  a size floor). The floor only applies when the dump has tables, so an almost empty database does
+  not block it the way it blocked the first `retire` test in `app.md`. Today it only runs when a
+  service sets `backupBeforeMigrate`; `db-reset` would call it unconditionally.
+- **It connects as the application**, through `DATABASE_URL` (`read_db_url`). Dropping and
+  recreating needs the engine's root, as `retire --with-data` does: `mysql -uroot` with
+  `MYSQL_ROOT_PASSWORD` inside `stack-mysql-1`, `psql -U $POSTGRES_USER` inside `stack-postgres-1`.
+- **Creating is `create_database`**, used by `cmd_add` with the user and password `add` generated.
+  The reset reuses it with the user and password read from the existing `DATABASE_URL`, which is
+  what keeps the secrets file valid. A recreated Postgres database must again belong to that user,
+  or `prisma migrate deploy` fails on permissions.
+- **The schema step goes in `cmd_deploy`** next to `migrate "$app" "$version"`, after the images
+  are pulled (the template is read from them) and before `docker compose up`.
+- **The allowlist** gains two entries in `backend/src/shared/ssh/ssh-commands.ts` and two cases
+  in `infra/fleet/server-setup/setup-server.sh`, next to `retire`. `dbLoad` is the second command
+  after `secretsSet` whose payload travels on stdin; its size limit has to be decided there.
