@@ -283,6 +283,10 @@ ANSI and unicode in it, and the panel needs three things from it: which versions
 which is running, and which one a bare `deploy` would pick — that last being the only way to say
 "deploying would change nothing". Parsing the human output would have broken at the first label
 change. The JSON rows are collected while that output is produced, so the two cannot disagree.
+`registry_error` says why the registry could not be read (rejected or missing docker login, no
+route), null when it was: without it an unreadable registry looks exactly like "nothing newer
+published", which is how an expired GHCR token on every server hid new versions until 2026-10-14.
+The version card shows it in place of "up to date".
 
 **`exec` is absent and must stay absent.** `stack exec` is `docker compose exec <svc>
 <command...>` — a remote shell, which is the one thing [architecture.md](architecture.md) prohibits outright. `engine` is

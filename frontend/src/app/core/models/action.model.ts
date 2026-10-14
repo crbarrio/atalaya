@@ -35,6 +35,8 @@ export interface StackVersions {
   branch: string | null;
   /** What a bare deploy would pick. Equal to `running` means it would change nothing. */
   chosen: string | null;
+  /** Why the registry could not be read; set means only local images were listed. */
+  registry_error?: string | null;
   services: { image: string; versions: StackVersion[] }[];
 }
 

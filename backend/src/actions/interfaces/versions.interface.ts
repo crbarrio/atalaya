@@ -13,6 +13,15 @@ export interface StackVersions {
    * for itself, and what makes "deploying would change nothing" sayable.
    */
   chosen: string | null;
+  /**
+   * Why the registry could not be read — an expired or missing docker login,
+   * or no route to it. Null when it was read. When set, `versions` holds only
+   * what is downloaded on the server and `chosen` is picked from those, so
+   * "nothing newer" cannot be told from "could not ask". An expired GHCR token
+   * on every server once hid new versions for exactly that reason.
+   * Absent from a `stack` older than the field.
+   */
+  registry_error?: string | null;
   services: StackVersionedService[];
 }
 

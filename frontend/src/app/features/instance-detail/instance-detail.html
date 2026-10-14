@@ -170,6 +170,10 @@
               <span class="text-on-surface-variant text-[11px]">checking…</span>
             } @else if (versions.error()) {
               <span class="text-tertiary text-[11px]">could not reach stack</span>
+            } @else if (versionInfo()?.registry_error) {
+              <!-- Checked before "up to date": with the registry unread, nothing
+                   newer is not something stack can know. -->
+              <span class="font-jetbrains text-[11px] text-error">registry unreadable</span>
             } @else if (deployWouldChange()) {
               <span class="font-jetbrains text-[11px] text-tertiary">a newer version is published</span>
             } @else if (versionInfo()) {
@@ -206,10 +210,19 @@
                   deploy would use <span class="font-jetbrains text-tertiary">{{ v.chosen }}</span>
                 </span>
               }
-              <span class="text-on-surface-variant">
-                {{ availableVersions().length }} version(s) published
-              </span>
+              @if (v.registry_error) {
+                <span class="text-on-surface-variant">
+                  {{ availableVersions().length }} version(s) downloaded here
+                </span>
+              } @else {
+                <span class="text-on-surface-variant">
+                  {{ availableVersions().length }} version(s) published
+                </span>
+              }
             </div>
+            @if (v.registry_error) {
+              <p class="mt-2 font-jetbrains text-[11px] text-error break-words">{{ v.registry_error }}</p>
+            }
           }
         </div>
 
