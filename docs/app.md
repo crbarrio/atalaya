@@ -458,6 +458,11 @@ Built and verified on `homeserver` — see *Alertmanager + watchdog* and the reo
 pinging the URL from `SettingsService` (see *Settings screen* above), everything else upserted
 into `Incident` by Alertmanager's own fingerprint.
 
+**Reconciliation — 2026-11-13.** `incidents/incidents.scheduler.ts` runs
+`IncidentsService.reconcile()` every 5 minutes, which closes firing incidents absent from
+Alertmanager's `GET /api/v2/alerts`. The webhook answers before notifying. Why, and the guards,
+are in *Why there is no bypass route* in [architecture.md](architecture.md).
+
 The same day settled that atalaya is deployed as a clone on `homeserver`, not as a `stack`
 instance: [decisions/deploy-outside-stack-2026-08-19.md](decisions/deploy-outside-stack-2026-08-19.md).
 

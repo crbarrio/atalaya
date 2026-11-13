@@ -214,10 +214,22 @@ delivered once atalaya returns — a delay, not a loss; what can be missed is so
 and healed during the outage. And on being told the monitoring is down, the next action is to go
 and look anyway, where the content is waiting.
 
+What a retry does not cover is the `resolved`. Alertmanager sends it only for a group whose
+`firing` it counts as delivered, so a lost or timed-out `firing` leaves an incident atalaya may
+have stored but will never hear the end of. Two things close that gap. The webhook stores and
+answers at once, with notifications and the Watchdog ping running after the response, so a slow
+channel cannot push it past Alertmanager's deadline. And every five minutes
+`IncidentsService.reconcile()` closes any firing incident Alertmanager no longer holds as active —
+only while the Watchdog is present and Alertmanager has been up ten minutes, since without either
+every alert would look gone. Reconciled closures are not notified. Both came from the 2026-10-20
+internet outage, which left 27 incidents firing for weeks.
+
 ### Alert fatigue
 
 One downed server can generate dozens of notifications if grouping is left at defaults. By the
 third day they stop being read and the system stops being worth anything. Grouping keys, wait
 windows and repeat intervals are decided deliberately in `alertmanager.yml`, not inherited; the
-notifier fires on the two edges only (first seen, firing → resolved), never on Alertmanager's own
-repeats.
+notifier fires on the edges only (first seen, fired again, firing → resolved), never on
+Alertmanager's own repeats. "Fired again" is the same fingerprint with a new `startsAt`: the
+fingerprint is the label set, so a recurrence weeks later lands on the old row, which then takes
+the new start and goes back to the top of the inbox.
