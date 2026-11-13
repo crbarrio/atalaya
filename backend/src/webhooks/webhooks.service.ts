@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 
+import { IncidentNotification } from '../notifier/interfaces/notification-adapter.interface';
 import { NotifierService } from '../notifier/notifier.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { SettingsService } from '../settings/settings.service';
@@ -28,16 +29,41 @@ export class WebhooksService {
     private readonly notifier: NotifierService,
   ) {}
 
+  /**
+   * Stores what arrived and returns; whatever has to reach the outside world
+   * (notifications, the Watchdog ping) runs after the response, not before.
+   * Alertmanager counts a webhook that outlasts its deadline as undelivered,
+   * and never sends the `resolved` for a group it thinks was never notified.
+   * During the 2026-10-20 internet outage every send waited out its timeout,
+   * the webhook took longer than that deadline, and the incidents atalaya had
+   * already stored were never closed. `IncidentsService.reconcile()` closes
+   * any left behind anyway; this keeps the outage from leaving them at all.
+   */
   async handleAlertmanagerWebhook(payload: AlertmanagerWebhookPayload): Promise<void> {
+    const outbound: Array<() => Promise<void>> = [];
     for (const alert of payload.alerts) {
       if (alert.labels.alertname === 'Watchdog') {
-        await this.pingWatchdog();
+        outbound.push(() => this.pingWatchdog());
       } else if (await this.isMuted(alert)) {
         this.logger.debug(
           `Muted ${alert.labels.alertname} for ${alert.labels.server}:${alert.labels.mountpoint}`,
         );
       } else {
-        await this.upsertIncident(alert);
+        const notification = await this.upsertIncident(alert);
+        if (notification) outbound.push(() => this.notifier.notify(notification));
+      }
+    }
+    void this.runOutbound(outbound);
+  }
+
+  /** In order, one at a time, and never rejecting: nobody is waiting on it. */
+  private async runOutbound(tasks: Array<() => Promise<void>>): Promise<void> {
+    for (const task of tasks) {
+      try {
+        await task();
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        this.logger.error(`Outbound delivery failed: ${message}`);
       }
     }
   }
@@ -79,11 +105,12 @@ export class WebhooksService {
    * same alert updates the row instead of duplicating it, and a `resolved`
    * webhook closes it out.
    *
-   * Notified only on the two edges — first seen, and firing → resolved —
-   * never on every repeat while still firing: Alertmanager resends a firing
-   * alert on its own `repeat_interval`, and a channel is not a log.
+   * Returns the notification to send, or null. Only on the two edges — first
+   * seen, and firing → resolved — never on every repeat while still firing:
+   * Alertmanager resends a firing alert on its own `repeat_interval`, and a
+   * channel is not a log.
    */
-  private async upsertIncident(alert: AlertmanagerAlert): Promise<void> {
+  private async upsertIncident(alert: AlertmanagerAlert): Promise<IncidentNotification | null> {
     const serverName = alert.labels.server;
     const server = serverName
       ? await this.prisma.server.findUnique({ where: { name: serverName } })
@@ -112,15 +139,14 @@ export class WebhooksService {
 
     const isNew = !existing;
     const justResolved = existing?.status !== 'resolved' && alert.status === 'resolved';
-    if (isNew || justResolved) {
-      await this.notifier.notify({
-        alertName: incident.alertName,
-        severity: incident.severity,
-        summary: incident.summary,
-        description: incident.description,
-        serverName: serverName ?? null,
-        status: alert.status,
-      });
-    }
+    if (!isNew && !justResolved) return null;
+    return {
+      alertName: incident.alertName,
+      severity: incident.severity,
+      summary: incident.summary,
+      description: incident.description,
+      serverName: serverName ?? null,
+      status: alert.status,
+    };
   }
 }
