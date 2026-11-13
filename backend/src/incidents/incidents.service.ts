@@ -9,6 +9,13 @@ import { parseLabels } from './parse-labels';
 
 const MS_PER_HOUR = 3600 * 1000;
 
+/**
+ * Alertmanager keeps no alerts across a restart; Prometheus resends them on its
+ * next evaluation of each rule group. Until a few of those have passed, an
+ * alert missing from Alertmanager may simply not have arrived yet.
+ */
+const RECONCILE_MIN_UPTIME_MS = 10 * 60 * 1000;
+
 @Injectable()
 export class IncidentsService {
   constructor(
@@ -48,5 +55,38 @@ export class IncidentsService {
     });
 
     return { silenceId, endsAt };
+  }
+
+  /**
+   * Closes every firing incident Alertmanager no longer holds as active, and
+   * returns how many. The webhook alone cannot be trusted to close them:
+   * Alertmanager never sends the `resolved` for a group whose `firing` it
+   * counts as undelivered, even when atalaya did store it. That happened on
+   * 2026-10-20 — an internet outage made the webhook outlast Alertmanager's
+   * deadline while it waited on the notifier, and 27 incidents stayed firing
+   * for weeks after their conditions had cleared. A `resolved` sent while
+   * atalaya is restarting is lost the same way.
+   *
+   * Only when the alerting chain is demonstrably whole: the Watchdog, always
+   * firing, proves Prometheus is feeding Alertmanager — without it every alert
+   * would look gone — and a freshly restarted Alertmanager has not been resent
+   * everything yet. Not notified: what is corrected here is bookkeeping, and
+   * the condition may have cleared long ago.
+   */
+  async reconcile(): Promise<number> {
+    const [alerts, startedAt] = await Promise.all([
+      this.alertmanager.getAlerts(),
+      this.alertmanager.getStartedAt(),
+    ]);
+    if (Date.now() - startedAt.getTime() < RECONCILE_MIN_UPTIME_MS) return 0;
+    if (!alerts.some((alert) => alert.labels.alertname === 'Watchdog')) {
+      throw new Error('no Watchdog in Alertmanager: Prometheus may not be feeding it, nothing closed');
+    }
+
+    const { count } = await this.prisma.incident.updateMany({
+      where: { status: 'firing', fingerprint: { notIn: alerts.map((alert) => alert.fingerprint) } },
+      data: { status: 'resolved', endsAt: new Date() },
+    });
+    return count;
   }
 }
