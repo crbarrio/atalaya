@@ -105,16 +105,33 @@ export class WebhooksService {
    * same alert updates the row instead of duplicating it, and a `resolved`
    * webhook closes it out.
    *
-   * Returns the notification to send, or null. Only on the two edges — first
-   * seen, and firing → resolved — never on every repeat while still firing:
-   * Alertmanager resends a firing alert on its own `repeat_interval`, and a
-   * channel is not a log.
+   * The fingerprint is the label set, so the same alert firing again weeks
+   * later lands on the same row. It is told apart by `startsAt`, which is
+   * stable while an alert keeps firing and new when it fires again: the row
+   * then takes the new start and receipt time. Before that, marsella-test's
+   * failed backup of 2026-11-13 showed as "since 2026-08-22", the first time
+   * that alert had ever fired.
+   *
+   * Returns the notification to send, or null. Only on the edges — first
+   * seen, fired again, and firing → resolved — never on every repeat while
+   * still firing: Alertmanager resends a firing alert on its own
+   * `repeat_interval`, and a channel is not a log.
    */
   private async upsertIncident(alert: AlertmanagerAlert): Promise<IncidentNotification | null> {
     const serverName = alert.labels.server;
     const server = serverName
       ? await this.prisma.server.findUnique({ where: { name: serverName } })
       : null;
+
+    const startsAt = new Date(alert.startsAt);
+    const existing = await this.prisma.incident.findUnique({ where: { fingerprint: alert.fingerprint } });
+
+    const isNew = !existing;
+    const firedAgain =
+      !!existing &&
+      alert.status === 'firing' &&
+      (existing.status === 'resolved' || existing.startsAt.getTime() !== startsAt.getTime());
+    const justResolved = existing?.status !== 'resolved' && alert.status === 'resolved';
 
     const fields = {
       alertName: alert.labels.alertname ?? 'unknown',
@@ -123,23 +140,22 @@ export class WebhooksService {
       summary: alert.annotations.summary ?? null,
       description: alert.annotations.description ?? null,
       labels: JSON.stringify(alert.labels),
+      startsAt,
       // Alertmanager sends a zero-value endsAt on a still-firing alert, not
       // an absent field — trust `status`, not the timestamp, for this.
       endsAt: alert.status === 'resolved' ? new Date(alert.endsAt) : null,
       serverId: server?.id ?? null,
+      // The inbox sorts on this: a new occurrence goes to the top.
+      ...(firedAgain ? { receivedAt: new Date() } : {}),
     };
-
-    const existing = await this.prisma.incident.findUnique({ where: { fingerprint: alert.fingerprint } });
 
     const incident = await this.prisma.incident.upsert({
       where: { fingerprint: alert.fingerprint },
-      create: { fingerprint: alert.fingerprint, startsAt: new Date(alert.startsAt), ...fields },
+      create: { fingerprint: alert.fingerprint, ...fields },
       update: fields,
     });
 
-    const isNew = !existing;
-    const justResolved = existing?.status !== 'resolved' && alert.status === 'resolved';
-    if (!isNew && !justResolved) return null;
+    if (!isNew && !firedAgain && !justResolved) return null;
     return {
       alertName: incident.alertName,
       severity: incident.severity,
